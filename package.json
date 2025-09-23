@@ -1,0 +1,30 @@
+{
+  "name": "fertilizer-shop-manager",
+  "version": "1.0.0",
+  "description": "A web application for fertilizer shop owners to manage inventory and sales",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install"
+  },
+  "keywords": [
+    "fertilizer",
+    "shop",
+    "management",
+    "inventory",
+    "sales"
+  ],
+  "author": "Fertilizer Shop Manager",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@react-three/drei": "^9.56.15",
+    "@react-three/fiber": "^8.13.7",
+    "three": "^0.152.2"
+  }
+}
