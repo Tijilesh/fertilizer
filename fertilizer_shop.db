@@ -1,0 +1,7 @@
+cd server
+sqlite3 fertilizer_shop.db
+.tables
+SELECT * FROM cart_items;
+SELECT * FROM users;
+.quit
+

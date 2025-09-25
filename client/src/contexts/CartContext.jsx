@@ -1,9 +1,11 @@
 /**
  * Shopping Cart Context
  * Manages cart state, adding/removing items, and cart operations
+ * Uses database for authenticated users, localStorage for guests
  */
 
 import { createContext, useContext, useState, useEffect } from 'react'
+import { useAuth } from './AuthContext'
 
 const CartContext = createContext()
 
@@ -26,23 +28,39 @@ export const useCart = () => {
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([])
   const [isCartOpen, setIsCartOpen] = useState(false)
+  const { isAuthenticated } = useAuth()
 
-  // Load cart from localStorage on mount
+  // Load cart on mount and when auth status changes
   useEffect(() => {
+    loadCart()
+  }, [isAuthenticated])
+
+
+  // Save cart whenever it changes
+  useEffect(() => {
+    saveCart()
+  }, [cartItems])
+
+  const loadCart = () => {
+    // Always load from localStorage for frontend-only mode
     const savedCart = localStorage.getItem('cart')
     if (savedCart) {
       try {
         setCartItems(JSON.parse(savedCart))
       } catch (error) {
         console.error('Error loading cart from localStorage:', error)
+        setCartItems([])
       }
+    } else {
+      setCartItems([])
     }
-  }, [])
+  }
 
-  // Save cart to localStorage whenever it changes
-  useEffect(() => {
+  const saveCart = () => {
+    // Always save to localStorage for frontend-only mode
     localStorage.setItem('cart', JSON.stringify(cartItems))
-  }, [cartItems])
+  }
+
 
   /**
    * Add item to cart
@@ -50,6 +68,7 @@ export const CartProvider = ({ children }) => {
    * @param {number} quantity - Quantity to add (default: 1)
    */
   const addToCart = (product, quantity = 1) => {
+    // Always use local state for frontend-only mode
     setCartItems(prevItems => {
       const existingItem = prevItems.find(item => item.id === product.id)
 
@@ -72,6 +91,7 @@ export const CartProvider = ({ children }) => {
    * @param {number} productId - ID of product to remove
    */
   const removeFromCart = (productId) => {
+    // Always use local state for frontend-only mode
     setCartItems(prevItems => prevItems.filter(item => item.id !== productId))
   }
 
@@ -86,10 +106,11 @@ export const CartProvider = ({ children }) => {
       return
     }
 
+    // Always use local state for frontend-only mode
     setCartItems(prevItems =>
       prevItems.map(item => {
         if (item.id === productId) {
-          return { ...item, quantity: Math.min(quantity, item.quantity) }
+          return { ...item, quantity: Math.min(quantity, item.available_quantity || item.quantity) }
         }
         return item
       })
@@ -100,6 +121,7 @@ export const CartProvider = ({ children }) => {
    * Clear all items from cart
    */
   const clearCart = () => {
+    // Always use local state for frontend-only mode
     setCartItems([])
   }
 

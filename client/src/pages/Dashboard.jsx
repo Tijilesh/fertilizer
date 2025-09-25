@@ -28,10 +28,17 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { format } from 'date-fns'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { Link } from 'react-router-dom'
+import WeatherWidget from '../components/common/WeatherWidget'
+import DiseaseDetection from '../components/common/DiseaseDetection'
+import FertilizerCalculator from '../components/common/FertilizerCalculator'
+import EducationHub from '../components/common/EducationHub'
+import CommunityForum from '../components/common/CommunityForum'
 
 const Dashboard = ({ products, sales }) => {
   const { user, logout } = useAuth()
+  const { t } = useLanguage()
   const [lowStockItems, setLowStockItems] = useState([])
   const [expiringItems, setExpiringItems] = useState([])
   const [creditReminders, setCreditReminders] = useState([])
@@ -138,8 +145,8 @@ const Dashboard = ({ products, sales }) => {
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome back, {user?.username}!</h1>
-              <p className="text-gray-600">Ready to optimize your farming with quality fertilizers</p>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('welcome')}, {user?.username}!</h1>
+              <p className="text-gray-600">{t('browseProducts')}</p>
             </div>
             <div className="text-right">
               <div className="flex items-center space-x-2 text-sm text-gray-500">
@@ -162,8 +169,8 @@ const Dashboard = ({ products, sales }) => {
             <div className="flex items-center space-x-3">
               <ShoppingCart className="h-6 w-6" />
               <div>
-                <div className="font-semibold">Shop Now</div>
-                <div className="text-sm opacity-90">Browse Products</div>
+                <div className="font-semibold">{t('shop')}</div>
+                <div className="text-sm opacity-90">{t('browseProducts')}</div>
               </div>
             </div>
           </Link>
@@ -346,70 +353,55 @@ const Dashboard = ({ products, sales }) => {
           </div>
         </div>
 
-        {/* Weather & Recommendations */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
-            <div className="flex items-center space-x-2 mb-4">
-              <Sun className="h-6 w-6 text-blue-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Weather Insights</h3>
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-700">Current Conditions</span>
-                <div className="flex items-center space-x-2">
-                  <Cloud className="h-5 w-5 text-gray-500" />
-                  <span className="text-sm">Partly Cloudy, 28°C</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-700">Soil Moisture</span>
-                <div className="flex items-center space-x-2">
-                  <Droplets className="h-5 w-5 text-blue-500" />
-                  <span className="text-sm">Optimal for planting</span>
-                </div>
-              </div>
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>Recommendation:</strong> Good time for applying nitrogen-rich fertilizers
-                </p>
-              </div>
-            </div>
-          </div>
+        {/* Weather Widget */}
+        <WeatherWidget />
 
-          <div className="bg-green-50 p-6 rounded-lg border border-green-200">
-            <div className="flex items-center space-x-2 mb-4">
-              <Star className="h-6 w-6 text-green-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-            </div>
-            <div className="space-y-3">
-              <button className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
-                <div className="flex items-center space-x-3">
-                  <Package className="h-5 w-5 text-green-600" />
-                  <div>
-                    <div className="font-medium text-gray-900">Track Order</div>
-                    <div className="text-sm text-gray-500">Check delivery status</div>
-                  </div>
+        {/* Disease Detection */}
+        <DiseaseDetection />
+
+        {/* Fertilizer Calculator */}
+        <FertilizerCalculator />
+
+        {/* Education Hub */}
+        <EducationHub />
+
+        {/* Community Forum */}
+        <CommunityForum />
+
+        {/* Quick Actions */}
+        <div className="bg-green-50 p-6 rounded-lg border border-green-200">
+          <div className="flex items-center space-x-2 mb-4">
+            <Star className="h-6 w-6 text-green-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+          </div>
+          <div className="space-y-3">
+            <button className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
+              <div className="flex items-center space-x-3">
+                <Package className="h-5 w-5 text-green-600" />
+                <div>
+                  <div className="font-medium text-gray-900">Track Order</div>
+                  <div className="text-sm text-gray-500">Check delivery status</div>
                 </div>
-              </button>
-              <button className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
-                <div className="flex items-center space-x-3">
-                  <User className="h-5 w-5 text-blue-600" />
-                  <div>
-                    <div className="font-medium text-gray-900">Update Profile</div>
-                    <div className="text-sm text-gray-500">Manage your information</div>
-                  </div>
+              </div>
+            </button>
+            <button className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
+              <div className="flex items-center space-x-3">
+                <User className="h-5 w-5 text-blue-600" />
+                <div>
+                  <div className="font-medium text-gray-900">Update Profile</div>
+                  <div className="text-sm text-gray-500">Manage your information</div>
                 </div>
-              </button>
-              <button className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
-                <div className="flex items-center space-x-3">
-                  <AlertTriangle className="h-5 w-5 text-orange-600" />
-                  <div>
-                    <div className="font-medium text-gray-900">Low Stock Alerts</div>
-                    <div className="text-sm text-gray-500">Get notified for favorites</div>
-                  </div>
+              </div>
+            </button>
+            <button className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
+              <div className="flex items-center space-x-3">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                <div>
+                  <div className="font-medium text-gray-900">Low Stock Alerts</div>
+                  <div className="text-sm text-gray-500">Get notified for favorites</div>
                 </div>
-              </button>
-            </div>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -469,7 +461,7 @@ const Dashboard = ({ products, sales }) => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t('dashboard')}</h1>
         <div className="flex items-center space-x-4">
           <div className="text-sm text-gray-500">
             Last updated: {format(new Date(), 'MMM dd, yyyy HH:mm')}
@@ -490,7 +482,7 @@ const Dashboard = ({ products, sales }) => {
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+              <p className="text-sm font-medium text-gray-600">{t('totalRevenue')}</p>
               <p className="text-2xl font-bold text-gray-900">₹{totalRevenue.toLocaleString()}</p>
             </div>
             <div className="p-3 bg-blue-100 rounded-full">
@@ -506,7 +498,7 @@ const Dashboard = ({ products, sales }) => {
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Products</p>
+              <p className="text-sm font-medium text-gray-600">{t('totalProducts')}</p>
               <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
             </div>
             <div className="p-3 bg-green-100 rounded-full">
@@ -522,7 +514,7 @@ const Dashboard = ({ products, sales }) => {
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Customers</p>
+              <p className="text-sm font-medium text-gray-600">{t('totalCustomers')}</p>
               <p className="text-2xl font-bold text-gray-900">{totalCustomers}</p>
             </div>
             <div className="p-3 bg-purple-100 rounded-full">
@@ -538,7 +530,7 @@ const Dashboard = ({ products, sales }) => {
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Avg Order Value</p>
+              <p className="text-sm font-medium text-gray-600">{t('avgOrderValue')}</p>
               <p className="text-2xl font-bold text-gray-900">₹{averageOrderValue.toFixed(0)}</p>
             </div>
             <div className="p-3 bg-orange-100 rounded-full">

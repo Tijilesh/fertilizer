@@ -29,14 +29,19 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true) // Loading state during initialization
   const navigate = useNavigate()
 
-  // Initialize authentication state from localStorage on app start
+  // Initialize authentication state with demo user for frontend-only mode
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    const userData = localStorage.getItem('user')
-
-    if (token && userData) {
-      setUser(JSON.parse(userData))
+    // Set demo user automatically
+    const demoUser = {
+      id: 1,
+      username: 'demo',
+      email: 'demo@example.com',
+      role: 'user'
     }
+    const demoToken = 'demo-token'
+    setUser(demoUser)
+    localStorage.setItem('token', demoToken)
+    localStorage.setItem('user', JSON.stringify(demoUser))
     setLoading(false)
   }, [])
 
