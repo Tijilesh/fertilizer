@@ -19,6 +19,9 @@ import SaleDetail from '../../pages/SaleDetail'
 import Shop from '../../pages/Shop'
 import Cart from '../../pages/Cart'
 import OrderHistory from '../../pages/OrderHistory'
+import Survey from '../../pages/Survey'
+import SmartAssistant from '../../pages/SmartAssistant'
+import GovernmentSchemes from '../../pages/GovernmentSchemes'
 
 /**
  * MainContent Component
@@ -33,9 +36,13 @@ const MainContent = ({ products, sales, onRefresh }) => {
       <main className={`p-8 overflow-auto transition-all duration-300 ${isCollapsed ? 'ml-16' : 'ml-64'}`}>
         <Routes>
           <Route path="/" element={<Dashboard products={products} sales={sales} />} />
+          <Route path="/dashboard" element={<Dashboard products={products} sales={sales} />} />
           <Route path="/shop" element={<Shop products={products} />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/orders" element={<OrderHistory />} />
+          <Route path="/survey" element={<Survey />} />
+          <Route path="/smart-assistant" element={<SmartAssistant />} />
+          <Route path="/schemes" element={<GovernmentSchemes />} />
           <Route path="/products" element={<Products products={products} onRefresh={onRefresh} />} />
           <Route path="/products/add" element={<AddProduct onSuccess={onRefresh} />} />
           <Route path="/products/edit/:id" element={<EditProduct onSuccess={onRefresh} />} />

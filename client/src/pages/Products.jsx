@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Edit, Trash2, Package, Sprout, Leaf, Search, Filter } from 'lucide-react'
 import api from '../utils/api'
+import VoiceInputButton from '../components/common/VoiceInputButton'
 
 const Products = ({ products, onRefresh }) => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -79,8 +80,15 @@ const Products = ({ products, onRefresh }) => {
                 placeholder="Search fertilizers, pesticides, seeds..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200 bg-gray-50 focus:bg-white"
+                className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200 bg-gray-50 focus:bg-white"
               />
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                <VoiceInputButton
+                  onTranscript={(transcript) => setSearchTerm(prev => prev + transcript)}
+                  placeholder="Voice search"
+                  className="text-green-600 hover:text-green-700"
+                />
+              </div>
             </div>
           </div>
           <div className="md:w-48">

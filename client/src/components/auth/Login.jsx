@@ -38,8 +38,7 @@ const Login = () => {
       login(user, token)
 
       toast.success('Login successful!')
-      const redirectPath = (user.role === 'owner' || user.role === 'admin') ? '/' : '/shop'
-      navigate(redirectPath)
+      navigate('/dashboard')
     } catch (error) {
       toast.error(error.response?.data?.error || 'Login failed')
     } finally {
@@ -174,8 +173,9 @@ const Login = () => {
           <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
             <h3 className="text-sm font-semibold text-green-800 mb-2">Demo Credentials</h3>
             <div className="text-xs text-green-700 space-y-1">
-              <p><strong>Owner:</strong> owner@example.com / owner123</p>
+              <p><strong>Customer:</strong> customer@example.com / customer123</p>
               <p><strong>Admin:</strong> admin@example.com / admin123</p>
+              <p><strong>Owner:</strong> owner@example.com / owner123</p>
             </div>
           </div>
         </div>

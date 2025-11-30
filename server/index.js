@@ -233,6 +233,19 @@ function seedDemoData() {
             );
             console.log('Seeded admin user: email=admin@example.com, password=admin123');
           }
+
+          // Check customer user
+          db.get('SELECT id FROM users WHERE email = ?', ['customer@example.com'], async (err, row) => {
+            if (err) return console.error('Error checking customer:', err);
+            if (!row) {
+              const hashedPassword = await bcrypt.hash('customer123', 10);
+              db.run(
+                'INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
+                ['customer', 'customer@example.com', hashedPassword, 'user']
+              );
+              console.log('Seeded customer user: email=customer@example.com, password=customer123');
+            }
+          });
         });
       });
     });
@@ -730,15 +743,63 @@ app.delete('/api/cart/:productId', verifyToken, async (req, res) => {
 });
 
 // Clear user's cart
-app.delete('/api/cart', verifyToken, async (req, res) => {
+app.delete('/api/cart', verifyToken, (req, res) => {
   const userId = req.user.id;
 
-  try {
-    await db.execute('DELETE FROM cart_items WHERE user_id = ?', [userId]);
+  db.run('DELETE FROM cart_items WHERE user_id = ?', [userId], function(err) {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
     res.json({ message: 'Cart cleared successfully' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  });
+});
+
+// Submit survey
+app.post('/api/survey', verifyToken, (req, res) => {
+  const userId = req.user.id;
+  const responses = JSON.stringify(req.body);
+
+  if (!responses || responses === '{}') {
+    return res.status(400).json({ error: 'Survey responses are required' });
   }
+
+  db.run(
+    'INSERT INTO surveys (user_id, responses) VALUES (?, ?)',
+    [userId, responses],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ id: this.lastID, message: 'Survey submitted successfully' });
+    }
+  );
+});
+
+// Get all surveys (admin only)
+app.get('/api/surveys', verifyToken, (req, res) => {
+  // Only allow owner and admin to access surveys
+  if (req.user.role !== 'owner' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+  }
+
+  db.all(`
+    SELECT s.id, s.responses, s.submitted_at, u.username, u.email, u.role
+    FROM surveys s
+    JOIN users u ON s.user_id = u.id
+    ORDER BY s.submitted_at DESC
+  `, (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    // Parse JSON responses
+    const surveys = rows.map(row => ({
+      ...row,
+      responses: JSON.parse(row.responses)
+    }));
+
+    res.json(surveys);
+  });
 });
 
 // Serve static files in production

@@ -29,20 +29,26 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true) // Loading state during initialization
   const navigate = useNavigate()
 
-  // Initialize authentication state with demo user for frontend-only mode
+  // Initialize authentication state - check for existing session
   useEffect(() => {
-    // Set demo user automatically
-    const demoUser = {
-      id: 1,
-      username: 'demo',
-      email: 'demo@example.com',
-      role: 'user'
+    const checkExistingAuth = () => {
+      const token = localStorage.getItem('token')
+      const userData = localStorage.getItem('user')
+
+      if (token && userData) {
+        try {
+          const user = JSON.parse(userData)
+          setUser(user)
+        } catch (error) {
+          // Invalid stored data, clear it
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+        }
+      }
+      setLoading(false)
     }
-    const demoToken = 'demo-token'
-    setUser(demoUser)
-    localStorage.setItem('token', demoToken)
-    localStorage.setItem('user', JSON.stringify(demoUser))
-    setLoading(false)
+
+    checkExistingAuth()
   }, [])
 
   /**
@@ -63,7 +69,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null)
     localStorage.removeItem('token')
     localStorage.removeItem('user')
-    navigate('/login')
+    navigate('/')
   }
 
   // Context value object containing auth state and methods

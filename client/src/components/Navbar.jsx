@@ -11,22 +11,42 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
   const { getCartItemCount } = useCart()
   const { t } = useLanguage()
 
-  const allNavItems = [
-    { path: '/', label: t('dashboard'), icon: Home, roles: ['user', 'owner'], color: 'text-blue-600' },
-    { path: '/shop', label: t('shop'), icon: Leaf, roles: ['user', 'owner'], color: 'text-green-600' },
-    { path: '/cart', label: t('cart'), icon: ShoppingCart, roles: ['user', 'owner'], badge: getCartItemCount(), color: 'text-orange-600' },
-    { path: '/orders', label: t('orders'), icon: Receipt, roles: ['user', 'owner'], color: 'text-purple-600' },
-    { path: '/products', label: t('products'), icon: Sprout, roles: ['owner'], color: 'text-emerald-600' },
-    { path: '/sales', label: t('sales'), icon: TrendingUp, roles: ['owner'], color: 'text-indigo-600' },
-    { path: '/customers', label: t('customers'), icon: Users, roles: ['owner'], color: 'text-teal-600' },
-    { path: '/purchases', label: t('purchases'), icon: Truck, roles: ['owner'], color: 'text-cyan-600' },
-    { path: '/payments', label: t('payments'), icon: PiggyBank, roles: ['owner'], color: 'text-green-600' },
-    { path: '/accounting', label: t('accounting'), icon: Calculator, roles: ['owner'], color: 'text-gray-600' },
-    { path: '/stock-expiry', label: t('stock-alerts'), icon: AlertTriangle, roles: ['owner'], color: 'text-red-600' },
-    { path: '/mobile-app', label: t('mobile-app'), icon: Smartphone, roles: ['owner'], color: 'text-blue-600' },
-    { path: '/analytics', label: t('analytics'), icon: BarChart3, roles: ['owner'], color: 'text-violet-600' },
-    { path: '/reports', label: t('reports'), icon: Wheat, roles: ['owner'], color: 'text-amber-600' },
-  ]
+  // Filter nav items based on user role - owners get all access
+  const getNavItemsForRole = (role) => {
+    const baseItems = [
+      { path: '/dashboard', label: t('dashboard'), icon: Home, roles: ['user', 'owner', 'admin'], color: 'text-blue-600' },
+      { path: '/shop', label: t('shop'), icon: Leaf, roles: ['user', 'owner', 'admin'], color: 'text-green-600' },
+      { path: '/cart', label: t('cart'), icon: ShoppingCart, roles: ['user', 'owner', 'admin'], badge: getCartItemCount(), color: 'text-orange-600' },
+      { path: '/orders', label: t('orders'), icon: Receipt, roles: ['user', 'owner', 'admin'], color: 'text-purple-600' },
+      { path: '/survey', label: 'Survey', icon: Zap, roles: ['user', 'owner', 'admin'], color: 'text-pink-600' },
+      { path: '/smart-assistant', label: 'Smart Assistant', icon: Zap, roles: ['user', 'owner', 'admin'], color: 'text-purple-600' },
+      { path: '/schemes', label: 'Government Schemes', icon: Building, roles: ['user', 'owner', 'admin'], color: 'text-indigo-600' },
+    ]
+
+    const adminItems = [
+      { path: '/products', label: t('products'), icon: Sprout, roles: ['owner', 'admin'], color: 'text-emerald-600' },
+      { path: '/sales', label: t('sales'), icon: TrendingUp, roles: ['owner', 'admin'], color: 'text-indigo-600' },
+      { path: '/customers', label: t('customers'), icon: Users, roles: ['owner', 'admin'], color: 'text-teal-600' },
+      { path: '/purchases', label: t('purchases'), icon: Truck, roles: ['owner', 'admin'], color: 'text-cyan-600' },
+      { path: '/payments', label: t('payments'), icon: PiggyBank, roles: ['owner', 'admin'], color: 'text-green-600' },
+      { path: '/accounting', label: t('accounting'), icon: Calculator, roles: ['owner', 'admin'], color: 'text-gray-600' },
+      { path: '/stock-expiry', label: t('stock-alerts'), icon: AlertTriangle, roles: ['owner', 'admin'], color: 'text-red-600' },
+      { path: '/mobile-app', label: t('mobile-app'), icon: Smartphone, roles: ['owner', 'admin'], color: 'text-blue-600' },
+      { path: '/analytics', label: t('analytics'), icon: BarChart3, roles: ['owner', 'admin'], color: 'text-violet-600' },
+      { path: '/reports', label: t('reports'), icon: Wheat, roles: ['owner', 'admin'], color: 'text-amber-600' },
+    ]
+
+    // Owners get all items, admins get admin items, users get base items
+    if (role === 'owner') {
+      return [...baseItems, ...adminItems]
+    } else if (role === 'admin') {
+      return [...baseItems, ...adminItems]
+    } else {
+      return baseItems
+    }
+  }
+
+  const allNavItems = getNavItemsForRole(user?.role)
 
   // Filter nav items based on user role
   const navItems = allNavItems.filter(item => item.roles.includes(user?.role))
@@ -72,7 +92,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
         </div>
 
         {/* Navigation Items */}
-        <div className="flex-1 py-4">
+        <div className="flex-1 py-4 overflow-y-auto">
           <nav className="space-y-1 px-2">
             {navItems.map((item) => {
               const Icon = item.icon

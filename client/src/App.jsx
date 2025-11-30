@@ -7,6 +7,7 @@ import { Login, Signup, ProtectedRoute } from './components/auth'
 import { DEMO_PRODUCTS, DEMO_SALES } from './data/demoData'
 import { LoadingSpinner, MainContent } from './components/common'
 import Shop from './pages/Shop'
+import Landing from './pages/Landing'
 import api from './utils/api'
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
         <CartProvider>
           <div className="min-h-screen bg-gray-50">
             <Routes>
+              <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/shop" element={
