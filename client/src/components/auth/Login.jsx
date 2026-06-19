@@ -31,8 +31,11 @@ const Login = () => {
     e.preventDefault()
     setLoading(true)
 
+    console.log('Attempting login with:', formData)
+
     try {
       const response = await api.post('/auth/login', formData)
+      console.log('API response:', response.data)
       const { token, user } = response.data
 
       login(user, token)
@@ -40,6 +43,7 @@ const Login = () => {
       toast.success('Login successful!')
       navigate('/dashboard')
     } catch (error) {
+      console.log('Login error:', error.response?.data || error.message)
       toast.error(error.response?.data?.error || 'Login failed')
     } finally {
       setLoading(false)
@@ -85,10 +89,10 @@ const Login = () => {
         </div>
 
         {/* Login Form */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Sign In</h2>
-            <p className="text-gray-600 mt-1">Access your farming dashboard</p>
+        <div className="glass-card premium-shadow p-10 rounded-3xl border border-white/40 backdrop-blur-xl">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Sign In</h2>
+            <p className="text-gray-600 mt-2">Access your farming dashboard</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -140,16 +144,16 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-4 px-6 rounded-xl font-bold text-lg hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 active:scale-[0.98]"
             >
               {loading ? (
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
                   <span>Signing In...</span>
                 </div>
               ) : (
-                <div className="flex items-center justify-center space-x-2">
-                  <Leaf className="w-5 h-5" />
+                <div className="flex items-center justify-center space-x-3">
+                  <Leaf className="w-6 h-6" />
                   <span>Sign In to Your Account</span>
                 </div>
               )}
@@ -169,15 +173,7 @@ const Login = () => {
             </p>
           </div>
 
-          {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
-            <h3 className="text-sm font-semibold text-green-800 mb-2">Demo Credentials</h3>
-            <div className="text-xs text-green-700 space-y-1">
-              <p><strong>Customer:</strong> customer@example.com / customer123</p>
-              <p><strong>Admin:</strong> admin@example.com / admin123</p>
-              <p><strong>Owner:</strong> owner@example.com / owner123</p>
-            </div>
-          </div>
+
         </div>
 
         {/* Footer */}

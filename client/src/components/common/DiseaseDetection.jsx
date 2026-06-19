@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Camera, Upload, X, AlertTriangle, CheckCircle, Loader } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -9,7 +9,58 @@ const DiseaseDetection = () => {
   const [analyzing, setAnalyzing] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  
   const fileInputRef = useRef(null)
+  const videoRef = useRef(null)
+  const streamRef = useRef(null)
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    setIsCameraActive(false)
+  }, [])
+
+  useEffect(() => {
+    return () => stopCamera()
+  }, [stopCamera])
+
+  const startCamera = async () => {
+    setError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      streamRef.current = stream
+      setIsCameraActive(true)
+    } catch (err) {
+      console.error("Camera access error:", err)
+      setError('Camera access denied or unavailable. Please upload an image instead.')
+    }
+  }
+
+  useEffect(() => {
+    if (isCameraActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+    }
+  }, [isCameraActive])
+
+  const capturePhoto = () => {
+    if (videoRef.current) {
+      const canvas = document.createElement('canvas')
+      canvas.width = videoRef.current.videoWidth
+      canvas.height = videoRef.current.videoHeight
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(videoRef.current, 0, 0)
+      
+      canvas.toBlob((blob) => {
+        const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' })
+        setSelectedImage(file)
+        setPreview(canvas.toDataURL('image/jpeg'))
+        stopCamera()
+      }, 'image/jpeg', 0.8)
+    }
+  }
 
   // Mock disease detection results
   const mockResults = [
@@ -52,7 +103,7 @@ const DiseaseDetection = () => {
   }
 
   const handleCameraCapture = () => {
-    fileInputRef.current?.click()
+    startCamera()
   }
 
   const analyzeImage = async () => {
@@ -80,6 +131,7 @@ const DiseaseDetection = () => {
     setPreview(null)
     setResult(null)
     setError(null)
+    stopCamera()
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -92,7 +144,33 @@ const DiseaseDetection = () => {
         <h3 className="text-lg font-semibold text-gray-900">{t('cropDiseaseDetection')}</h3>
       </div>
 
-      {!preview ? (
+      {isCameraActive ? (
+        <div className="space-y-4">
+          <div className="relative bg-black rounded-lg overflow-hidden">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              className="w-full h-auto max-h-[60vh] object-contain"
+            />
+            <button
+              onClick={stopCamera}
+              className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors duration-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex justify-center">
+            <button
+              onClick={capturePhoto}
+              className="flex items-center space-x-2 bg-green-600 text-white px-8 py-4 rounded-full hover:bg-green-700 transition-all duration-200 shadow-lg hover:shadow-green-500/30"
+            >
+              <Camera className="w-6 h-6" />
+              <span className="font-bold text-lg">Capture</span>
+            </button>
+          </div>
+        </div>
+      ) : !preview ? (
         <div className="text-center py-8">
           <div className="mb-6">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full">
