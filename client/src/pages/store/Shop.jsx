@@ -52,6 +52,9 @@ const Shop = ({ products }) => {
   const productTypes = ['all', ...new Set(productList.map(p => p.type).filter(Boolean))]
 
   const filteredProducts = productList.filter(product => {
+    // Only show in-stock products
+    if (!product.quantity || product.quantity <= 0) return false;
+    
     const name = product.name || ''
     const type = product.type || ''
     const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||

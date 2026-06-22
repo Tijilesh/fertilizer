@@ -9,6 +9,7 @@ const FarmerDetail = () => {
   const navigate = useNavigate()
   const [farmer, setFarmer] = useState(null)
   const [sales, setSales] = useState([])
+  const [onlineOrders, setOnlineOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -21,6 +22,7 @@ const FarmerDetail = () => {
       const response = await api.get(`/farmers/${id}`)
       setFarmer(response.data)
       setSales(response.data.sales || [])
+      setOnlineOrders(response.data.onlineOrders || [])
     } catch (error) {
       toast.error('Failed to load farmer details')
       navigate('/farmers')
@@ -165,7 +167,9 @@ const FarmerDetail = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Amount Spent</p>
-              <p className="text-3xl font-bold text-green-600 mt-2">₹{(farmer.total_spent || 0).toLocaleString()}</p>
+              <p className="text-3xl font-bold text-green-600 mt-2">
+                ₹{((farmer.total_spent || 0) + onlineOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0)).toLocaleString()}
+              </p>
             </div>
             <div className="p-3 bg-green-100 rounded-full">
               <DollarSign className="w-6 h-6 text-green-600" />
@@ -232,7 +236,54 @@ const FarmerDetail = () => {
         ) : (
           <div className="text-center py-12 text-gray-600">
             <ShoppingCart className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <p>No purchase history for this farmer</p>
+            <p>No in-store purchase history for this farmer</p>
+          </div>
+        )}
+      </div>
+
+      {/* Online Orders History */}
+      <div className="glass-card premium-shadow p-8 rounded-3xl border">
+        <h2 className="text-2xl font-bold text-teal-900 mb-6">Online Orders History</h2>
+        
+        {onlineOrders && onlineOrders.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b-2 border-teal-200">
+                  <th className="text-left py-3 px-4 font-bold text-teal-700">Date</th>
+                  <th className="text-left py-3 px-4 font-bold text-teal-700">Order ID</th>
+                  <th className="text-left py-3 px-4 font-bold text-teal-700">Items</th>
+                  <th className="text-left py-3 px-4 font-bold text-teal-700">Amount</th>
+                  <th className="text-left py-3 px-4 font-bold text-teal-700">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {onlineOrders.map((order) => (
+                  <tr key={order.id} className="border-b border-gray-100 hover:bg-teal-50/50">
+                    <td className="py-4 px-4 text-sm text-gray-900">
+                      {new Date(order.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="py-4 px-4 text-sm font-medium text-teal-700">{order.order_number}</td>
+                    <td className="py-4 px-4 text-sm text-gray-700">{order.items || '-'}</td>
+                    <td className="py-4 px-4 text-sm font-bold text-teal-600">₹{order.total_amount?.toLocaleString()}</td>
+                    <td className="py-4 px-4">
+                      <span className={`inline-flex px-3 py-1 text-xs font-black uppercase tracking-widest rounded-full ${
+                        order.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                        order.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                        'bg-orange-100 text-orange-800'
+                      }`}>
+                        {order.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-600">
+            <ShoppingCart className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <p>No online orders for this farmer</p>
           </div>
         )}
       </div>

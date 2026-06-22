@@ -36,6 +36,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { Link } from 'react-router-dom'
 import api from '../../utils/api'
+import toast from 'react-hot-toast'
 import WeatherWidget from '../../components/common/WeatherWidget'
 import DiseaseDetection from '../../components/common/DiseaseDetection'
 import FertilizerCalculator from '../../components/common/FertilizerCalculator'
@@ -57,6 +58,12 @@ const Dashboard = ({ products, sales }) => {
   const [expiringItems, setExpiringItems] = useState([])
   const [creditReminders, setCreditReminders] = useState([])
   const [recentTransactions, setRecentTransactions] = useState([])
+  
+  // Quick Actions Modals State
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [showAlertsModal, setShowAlertsModal] = useState(false)
+  const [profileData, setProfileData] = useState({ name: user?.username || '', phone: localStorage.getItem('profilePhone') || '', address: localStorage.getItem('profileAddress') || '' })
+  const [alertsConfig, setAlertsConfig] = useState(JSON.parse(localStorage.getItem('alertsConfig')) || { email: true, sms: false, threshold: 5, phone: '' })
 
   // User dashboard state
   const [searchTerm, setSearchTerm] = useState('')
@@ -93,20 +100,32 @@ const Dashboard = ({ products, sales }) => {
         }
       }
 
-      const results = await Promise.all([
-        fetchData('/dashboard/stats', DEMO_DASHBOARD_STATS),
-        fetchData('/dashboard/farmer-tips', DEMO_FARMER_TIPS),
-        fetchData('/dashboard/seasonal-offers', DEMO_SEASONAL_OFFERS),
-        fetchData('/dashboard/credit-reminders', []),
-        fetchData('/analytics/summary', DEMO_ANALYTICS)
-      ])
+      if (user?.role === 'user') {
+        const results = await Promise.all([
+          fetchData('/dashboard/farmer-tips', DEMO_FARMER_TIPS),
+          fetchData('/dashboard/seasonal-offers', DEMO_SEASONAL_OFFERS),
+          fetchData('/orders', [])
+        ])
 
-      setStats(results[0])
-      setFarmerTips(results[1])
-      setSeasonalOffers(results[2])
-      setCreditReminders(results[3])
-      setSalesChartData(results[4]?.monthlySales || [])
-      setCategoryChartData(results[4]?.categoryData || [])
+        setFarmerTips(results[0])
+        setSeasonalOffers(results[1])
+        setUserOrders(results[2].slice(0, 3))
+      } else {
+        const results = await Promise.all([
+          fetchData('/dashboard/stats', DEMO_DASHBOARD_STATS),
+          fetchData('/dashboard/farmer-tips', DEMO_FARMER_TIPS),
+          fetchData('/dashboard/seasonal-offers', DEMO_SEASONAL_OFFERS),
+          fetchData('/dashboard/credit-reminders', []),
+          fetchData('/analytics/summary', DEMO_ANALYTICS)
+        ])
+
+        setStats(results[0])
+        setFarmerTips(results[1])
+        setSeasonalOffers(results[2])
+        setCreditReminders(results[3])
+        setSalesChartData(results[4]?.monthlySales || [])
+        setCategoryChartData(results[4]?.categoryData || [])
+      }
     } catch (error) {
       console.error('Error in fetchDashboardData:', error)
     } finally {
@@ -121,7 +140,10 @@ const Dashboard = ({ products, sales }) => {
     setLowStockItems(productList.filter(p => p.quantity < 10))
     setExpiringItems(productList.filter(p => p.quantity > 0).slice(0, 5))
     setRecentTransactions(salesList.slice(0, 5))
-    setUserOrders(salesList.slice(0, 3))
+    
+    if (user?.role !== 'user') {
+      setUserOrders(salesList.slice(0, 3))
+    }
 
     if (user) {
       fetchDashboardData()
@@ -147,10 +169,104 @@ const Dashboard = ({ products, sales }) => {
   const salesList = Array.isArray(sales) ? sales : []
   const productList = Array.isArray(products) ? products : []
 
-  const totalRevenue = salesList.reduce((sum, sale) => sum + (parseFloat(sale.total_amount) || 0), 0)
-  const totalProducts = productList.length
-  const totalCustomers = new Set(salesList.map(sale => sale.customer_name).filter(Boolean)).size
-  const averageOrderValue = totalRevenue / (salesList.length || 1)
+  const totalRevenue = stats.totalRevenue || 0
+  const totalProducts = stats.totalProducts || 0
+  const totalFarmers = stats.totalFarmers || 0
+  const averageOrderValue = stats.averageOrderValue || 0
+
+  const dynamicSalesChartData = salesChartData?.length > 0 ? salesChartData : salesData
+  const dynamicCategoryChartData = categoryChartData?.length > 0 ? categoryChartData : productCategoryData
+
+  const renderModals = () => (
+    <>
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl border-2 border-gray-100 relative animate-in zoom-in-95 duration-300">
+            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+              <User className="w-6 h-6 text-primary-600" />
+              Update Profile
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input type="text" value={profileData.name} onChange={(e) => setProfileData({...profileData, name: e.target.value})} className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                <input type="tel" value={profileData.phone} onChange={(e) => setProfileData({...profileData, phone: e.target.value})} placeholder="+91 xxxxxxxxxx" className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
+                <textarea value={profileData.address} onChange={(e) => setProfileData({...profileData, address: e.target.value})} placeholder="Full address for quick checkout..." className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 min-h-[100px]" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-8">
+              <button onClick={() => setShowProfileModal(false)} className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
+              <button onClick={() => {
+                localStorage.setItem('profilePhone', profileData.phone)
+                localStorage.setItem('profileAddress', profileData.address)
+                toast.success('Profile updated successfully!')
+                setShowProfileModal(false)
+              }} className="px-5 py-2.5 bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 shadow-lg shadow-primary-500/30 transition-all">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alerts Modal */}
+      {showAlertsModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl border-2 border-gray-100 relative animate-in zoom-in-95 duration-300">
+            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+              <AlertTriangle className="w-6 h-6 text-orange-500" />
+              Low Stock Alerts
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">Configure how you want to receive notifications when your favorite products are running low.</p>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-gray-100">
+                <div>
+                  <div className="font-bold text-gray-900 text-sm">Email Notifications</div>
+                  <div className="text-xs text-gray-500">Receive alerts to {user?.email}</div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" checked={alertsConfig.email} onChange={(e) => setAlertsConfig({...alertsConfig, email: e.target.checked})} className="sr-only peer" />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-gray-100">
+                <div>
+                  <div className="font-bold text-gray-900 text-sm">SMS Notifications</div>
+                  <div className="text-xs text-gray-500">Instant text alerts</div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" checked={alertsConfig.sms} onChange={(e) => setAlertsConfig({...alertsConfig, sms: e.target.checked})} className="sr-only peer" />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                </label>
+              </div>
+              
+              {alertsConfig.sms && (
+                <div className="animate-in slide-in-from-top-2">
+                  <input type="tel" value={alertsConfig.phone} onChange={(e) => setAlertsConfig({...alertsConfig, phone: e.target.value})} placeholder="Enter mobile number" className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button onClick={() => setShowAlertsModal(false)} className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-colors">Close</button>
+              <button onClick={() => {
+                localStorage.setItem('alertsConfig', JSON.stringify(alertsConfig))
+                toast.success('Alert preferences saved successfully!', { icon: '🔔' })
+                setShowAlertsModal(false)
+              }} className="px-5 py-2.5 bg-gray-900 text-white font-medium rounded-xl hover:bg-black shadow-lg shadow-gray-900/30 transition-all">Save Preferences</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
 
   // Show different dashboard based on user role
   if (user?.role === 'user') {
@@ -160,7 +276,7 @@ const Dashboard = ({ products, sales }) => {
       const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         type.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesCategory = selectedCategory === 'all' || type === selectedCategory
-      return matchesSearch && matchesCategory && (product.quantity || 0) > 0
+      return matchesSearch && matchesCategory
     })
 
     const productCategories = [...new Set(productList.map(p => p.type).filter(Boolean))]
@@ -168,7 +284,7 @@ const Dashboard = ({ products, sales }) => {
     return (
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header with User Info */}
-        <div className="glass-card premium-shadow p-6 rounded-xl border group">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300 group">
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('welcome')}, {user?.username}!</h1>
@@ -239,7 +355,7 @@ const Dashboard = ({ products, sales }) => {
         </div>
 
         {/* Search and Categories */}
-        <div className="glass-card premium-shadow p-6 rounded-xl border">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
@@ -294,7 +410,7 @@ const Dashboard = ({ products, sales }) => {
 
         {/* Recent Orders & Quick Reorder */}
         {userOrders.length > 0 && (
-          <div className="glass-card premium-shadow p-6 rounded-xl border">
+          <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">{t('recentOrders')}</h3>
               <Link to="/orders" className="text-green-600 hover:text-green-700 text-sm font-medium">
@@ -309,8 +425,8 @@ const Dashboard = ({ products, sales }) => {
                       <Package className="h-4 w-4 text-green-600" />
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900">{t('orderNumberLabel')}{order.id}</div>
-                      <div className="text-sm text-gray-500">{format(new Date(order.sale_date), 'MMM dd, yyyy')}</div>
+                      <div className="font-medium text-gray-900">{t('orderNumberLabel')}{order.order_number || order.id}</div>
+                      <div className="text-sm text-gray-500">{format(new Date(order.created_at || order.sale_date), 'MMM dd, yyyy')}</div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
@@ -327,7 +443,7 @@ const Dashboard = ({ products, sales }) => {
         )}
 
         {/* Seasonal Offers */}
-        <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-6 rounded-lg text-white">
+        <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-8 rounded-[2rem] shadow-xl text-white">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-bold mb-2">🎉 {t('seasonalOffersLabel')}</h3>
@@ -359,14 +475,14 @@ const Dashboard = ({ products, sales }) => {
         </div>
 
         {/* Farmer Tips */}
-        <div className="glass-card premium-shadow p-6 rounded-xl border">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
           <div className="flex items-center space-x-2 mb-4">
             <Leaf className="h-6 w-6 text-green-600" />
             <h3 className="text-lg font-semibold text-gray-900">{t('farmerTipsLabel')}</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {farmerTips.map((tip) => (
-              <div key={tip.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow duration-200">
+              <div key={tip.id} className="border-2 rounded-2xl p-4 hover:shadow-md transition-shadow duration-200">
                 <div className="flex items-center space-x-2 mb-2">
                   <span className="text-xl">{tip.icon}</span>
                   <span className="text-sm font-medium text-green-600">{tip.category}</span>
@@ -394,13 +510,13 @@ const Dashboard = ({ products, sales }) => {
         <CommunityForum />
 
         {/* Quick Actions */}
-        <div className="bg-green-50 p-6 rounded-lg border border-green-200">
+        <div className="bg-green-50 p-8 rounded-[2rem] border-2 border-green-200 shadow-xl">
           <div className="flex items-center space-x-2 mb-4">
             <Star className="h-6 w-6 text-green-600" />
             <h3 className="text-lg font-semibold text-gray-900">{t('quickActionsTitle')}</h3>
           </div>
           <div className="space-y-3">
-            <button className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
+            <Link to="/orders" className="block w-full text-left p-4 bg-white rounded-2xl hover:bg-gray-50 transition-colors border-2">
               <div className="flex items-center space-x-3">
                 <Package className="h-5 w-5 text-green-600" />
                 <div>
@@ -408,8 +524,8 @@ const Dashboard = ({ products, sales }) => {
                   <div className="text-sm text-gray-500">{t('checkDeliveryStatus')}</div>
                 </div>
               </div>
-            </button>
-            <button className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
+            </Link>
+            <button onClick={() => setShowProfileModal(true)} className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
               <div className="flex items-center space-x-3">
                 <User className="h-5 w-5 text-blue-600" />
                 <div>
@@ -418,7 +534,7 @@ const Dashboard = ({ products, sales }) => {
                 </div>
               </div>
             </button>
-            <button className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
+            <button onClick={() => setShowAlertsModal(true)} className="w-full text-left p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
               <div className="flex items-center space-x-3">
                 <AlertTriangle className="h-5 w-5 text-orange-600" />
                 <div>
@@ -431,14 +547,14 @@ const Dashboard = ({ products, sales }) => {
         </div>
 
         {/* Products Grid */}
-        <div className="glass-card premium-shadow p-6 rounded-xl border">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             {selectedCategory === 'all' ? t('allProducts') : `${selectedCategory} ${t('productsCountLabel')}`}
             {searchTerm && ` - "${searchTerm}"`}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredProducts.slice(0, 8).map((product) => (
-              <div key={product.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow duration-200">
+              <div key={product.id} className="border-2 rounded-2xl p-4 hover:shadow-md transition-shadow duration-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded">
                     {product.type}
@@ -476,6 +592,7 @@ const Dashboard = ({ products, sales }) => {
             </div>
           )}
         </div>
+        {renderModals()}
       </div>
     )
   }
@@ -503,11 +620,11 @@ const Dashboard = ({ products, sales }) => {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="glass-card premium-shadow p-6 rounded-xl border premium-hover">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300 premium-hover">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">{t('totalRevenue')}</p>
-              <p className="text-2xl font-bold text-gray-900">₹{stats.totalRevenue.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-gray-900">₹{totalRevenue.toLocaleString()}</p>
             </div>
             <div className="p-3 bg-blue-100 rounded-full">
               <DollarSign className="h-6 w-6 text-blue-600" />
@@ -521,11 +638,11 @@ const Dashboard = ({ products, sales }) => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="glass-card p-8 rounded-[2rem] border-2 border-white/50 shadow-xl hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">{t('totalProducts')}</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalProducts}</p>
+              <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
             </div>
             <div className="p-3 bg-green-100 rounded-full">
               <Package className="h-6 w-6 text-green-600" />
@@ -539,11 +656,11 @@ const Dashboard = ({ products, sales }) => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="glass-card p-8 rounded-[2rem] border-2 border-white/50 shadow-xl hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">{t('totalCustomers')}</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalCustomers}</p>
+              <p className="text-sm font-medium text-gray-600">{t('totalFarmers') || 'Total Farmers'}</p>
+              <p className="text-2xl font-bold text-gray-900">{totalFarmers}</p>
             </div>
             <div className="p-3 bg-purple-100 rounded-full">
               <Users className="h-6 w-6 text-purple-600" />
@@ -557,11 +674,11 @@ const Dashboard = ({ products, sales }) => {
           </div>
         </div>
 
-        <div className="glass-card premium-shadow p-6 rounded-xl border premium-hover bg-gradient-to-br from-white to-orange-50">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300 premium-hover bg-gradient-to-br from-white to-orange-50">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">{t('avgOrderValue')}</p>
-              <p className="text-2xl font-bold text-gray-900">₹{stats.averageOrderValue.toFixed(0)}</p>
+              <p className="text-2xl font-bold text-gray-900">₹{averageOrderValue.toFixed(0)}</p>
             </div>
             <div className="p-3 bg-orange-100 rounded-full">
               <ShoppingCart className="h-6 w-6 text-orange-600" />
@@ -576,11 +693,11 @@ const Dashboard = ({ products, sales }) => {
         </div>
 
         {/* Premium Business Insights */}
-        <div className="glass-card premium-shadow p-6 rounded-xl border premium-hover bg-gradient-to-br from-white to-emerald-50">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300 premium-hover bg-gradient-to-br from-white to-emerald-50">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-emerald-600">{t('projectedProfit')}</p>
-              <p className="text-2xl font-bold text-gray-900">₹{(stats.totalRevenue * 0.22).toLocaleString()}</p>
+              <p className="text-2xl font-bold text-gray-900">₹{(totalRevenue * 0.22).toLocaleString()}</p>
             </div>
             <div className="p-3 bg-emerald-100 rounded-full">
               <TrendingUp className="h-6 w-6 text-emerald-600" />
@@ -592,7 +709,7 @@ const Dashboard = ({ products, sales }) => {
           </div>
         </div>
 
-        <div className="glass-card premium-shadow p-6 rounded-xl border premium-hover bg-gradient-to-br from-white to-blue-50">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300 premium-hover bg-gradient-to-br from-white to-blue-50">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-blue-600">{t('efficiencyScore')}</p>
@@ -608,6 +725,8 @@ const Dashboard = ({ products, sales }) => {
           </div>
         </div>
       </div>
+
+
 
       {/* Quick Actions Panel */}
       <div className="mb-6">
@@ -658,10 +777,10 @@ const Dashboard = ({ products, sales }) => {
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Sales Chart */}
-        <div className="glass-card premium-shadow p-6 rounded-xl border">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('monthlySales')}</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={salesChartData}>
+            <BarChart data={dynamicSalesChartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
@@ -672,12 +791,12 @@ const Dashboard = ({ products, sales }) => {
         </div>
 
         {/* Product Categories */}
-        <div className="glass-card premium-shadow p-6 rounded-xl border">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('productCategoriesLabel')}</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={categoryChartData}
+                data={dynamicCategoryChartData}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
@@ -686,7 +805,7 @@ const Dashboard = ({ products, sales }) => {
                 fill="#8884d8"
                 dataKey="value"
               >
-                {categoryChartData.map((entry, index) => (
+                {dynamicCategoryChartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
@@ -699,7 +818,7 @@ const Dashboard = ({ products, sales }) => {
       {/* Alerts and Notifications */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Low Stock Alerts */}
-        <div className="glass-card premium-shadow p-6 rounded-xl border">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">{t('lowStockAlerts')}</h3>
             <AlertTriangle className="h-5 w-5 text-orange-500" />
@@ -721,7 +840,7 @@ const Dashboard = ({ products, sales }) => {
         </div>
 
         {/* Credit Reminders */}
-        <div className="glass-card premium-shadow p-6 rounded-xl border">
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">{t('creditReminders')}</h3>
             <CreditCard className="h-5 w-5 text-blue-500" />
@@ -747,7 +866,7 @@ const Dashboard = ({ products, sales }) => {
       </div>
 
       {/* Recent Transactions */}
-      <div className="glass-card premium-shadow p-6 rounded-xl border">
+      <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">{t('recentTransactions')}</h3>
           <BarChart3 className="h-5 w-5 text-gray-500" />
@@ -803,6 +922,7 @@ const Dashboard = ({ products, sales }) => {
           </table>
         </div>
       </div>
+      {renderModals()}
     </div>
   )
 }

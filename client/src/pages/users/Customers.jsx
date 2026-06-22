@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Phone, Mail, Calendar, AlertTriangle, CheckCircle, Pencil, Trash2 } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -6,9 +6,29 @@ const Customers = ({ sales }) => {
   const { t } = useLanguage()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
-  const [customerOverrides, setCustomerOverrides] = useState({})
-  const [deletedCustomerIds, setDeletedCustomerIds] = useState([])
+  const [customerOverrides, setCustomerOverrides] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('customerOverrides')) || {}
+    } catch {
+      return {}
+    }
+  })
+  const [deletedCustomerIds, setDeletedCustomerIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('deletedCustomerIds')) || []
+    } catch {
+      return []
+    }
+  })
   const [editingCustomer, setEditingCustomer] = useState(null)
+
+  useEffect(() => {
+    localStorage.setItem('customerOverrides', JSON.stringify(customerOverrides))
+  }, [customerOverrides])
+
+  useEffect(() => {
+    localStorage.setItem('deletedCustomerIds', JSON.stringify(deletedCustomerIds))
+  }, [deletedCustomerIds])
 
   const salesList = Array.isArray(sales) ? sales : []
 

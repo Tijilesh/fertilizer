@@ -44,7 +44,7 @@ const Products = ({ products, onRefresh }) => {
   return (
     <div className="space-y-6">
       {/* Header with Agricultural Theme */}
-      <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg">
+      <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-[2.5rem] p-8 text-white shadow-xl shadow-green-600/30">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-white bg-opacity-20 rounded-xl">
@@ -66,7 +66,7 @@ const Products = ({ products, onRefresh }) => {
       </div>
 
       {/* Filters */}
-      <div className="glass-card premium-shadow border border-gray-200 p-8 rounded-2xl">
+      <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
         <div className="flex items-center space-x-2 mb-4">
           <Filter className="w-5 h-5 text-green-600" />
           <h3 className="text-lg font-semibold text-gray-900">{t('filterSearch')}</h3>
@@ -117,7 +117,7 @@ const Products = ({ products, onRefresh }) => {
       </div>
 
       {/* Products Table */}
-      <div className="glass-card premium-shadow border border-gray-200 overflow-hidden rounded-2xl">
+      <div className="glass-card premium-shadow border-2 border-white/50 overflow-hidden rounded-[2rem] shadow-xl">
         {filteredProducts.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">

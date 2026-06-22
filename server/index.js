@@ -7,6 +7,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const { body, validationResult } = require('express-validator');
 
 // Email transporter — uses port 587 (STARTTLS) to avoid firewall blocks on 465
 const transporter = nodemailer.createTransport({
@@ -767,18 +768,23 @@ app.get('/api/government-schemes', async (req, res) => {
 
 app.get('/api/dashboard/stats', verifyToken, async (req, res) => {
   try {
-    const [[{ totalRevenue }]] = await db.execute('SELECT SUM(total_amount) as totalRevenue FROM sales');
-    const [[{ totalProducts }]] = await db.execute('SELECT COUNT(*) as totalProducts FROM products');
-    const [[{ totalCustomers }]] = await db.execute('SELECT COUNT(DISTINCT customer_name) as totalCustomers FROM sales');
+    const [[{ salesRevenue }]] = await db.execute('SELECT SUM(total_amount) as salesRevenue FROM sales');
+    const [[{ ordersRevenue }]] = await db.execute('SELECT SUM(total_amount) as ordersRevenue FROM orders');
+    const totalRevenue = (Number(salesRevenue) || 0) + (Number(ordersRevenue) || 0);
 
-    // Calculate average order value
+    const [[{ totalProducts }]] = await db.execute('SELECT COUNT(*) as totalProducts FROM products');
+    const [[{ totalFarmers }]] = await db.execute('SELECT COUNT(*) as totalFarmers FROM farmers');
+
     const [[{ totalSales }]] = await db.execute('SELECT COUNT(*) as totalSales FROM sales');
-    const avgOrderValue = totalSales > 0 ? (totalRevenue / totalSales) : 0;
+    const [[{ totalOrders }]] = await db.execute('SELECT COUNT(*) as totalOrders FROM orders');
+    const totalTransactions = (Number(totalSales) || 0) + (Number(totalOrders) || 0);
+    
+    const avgOrderValue = totalTransactions > 0 ? (totalRevenue / totalTransactions) : 0;
 
     res.json({
       totalRevenue: totalRevenue || 0,
       totalProducts: totalProducts || 0,
-      totalCustomers: totalCustomers || 0,
+      totalFarmers: totalFarmers || 0,
       averageOrderValue: avgOrderValue || 0,
       revenueGrowth: 12.5, // Logic for growth can be added here
       productGrowth: 5.2,
@@ -819,13 +825,15 @@ app.get('/api/dashboard/credit-reminders', verifyToken, async (req, res) => {
 
 app.get('/api/analytics/summary', verifyToken, async (req, res) => {
   try {
-    // Monthly sales
+    // Monthly sales (combining sales and orders)
     const [monthlySales] = await db.execute(`
-      SELECT DATE_FORMAT(sale_date, '%b') as month, SUM(total_amount) as sales
-      FROM sales
-      WHERE sale_date >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+      SELECT month, SUM(sales) as sales FROM (
+        SELECT DATE_FORMAT(sale_date, '%b') as month, total_amount as sales, sale_date as date FROM sales WHERE sale_date >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        UNION ALL
+        SELECT DATE_FORMAT(created_at, '%b') as month, total_amount as sales, created_at as date FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+      ) combined
       GROUP BY month
-      ORDER BY MIN(sale_date)
+      ORDER BY MIN(date)
     `);
 
     // Category distribution
@@ -1477,26 +1485,59 @@ app.get('/api/farmers', verifyToken, async (req, res) => {
   try {
     const salesHasFarmerId = await columnExists('sales', 'farmer_id');
 
+    // Auto-sync online customers into the farmers CRM table
+    await db.execute(`
+      INSERT INTO farmers (name, email, phone, status)
+      SELECT DISTINCT 
+        u.username as name, 
+        u.email, 
+        '' as phone, 
+        'active' as status
+      FROM users u 
+      JOIN orders o ON u.id = o.user_id
+      WHERE u.email IS NOT NULL 
+      AND u.email != ''
+      AND u.email NOT IN (SELECT email FROM farmers WHERE email IS NOT NULL AND email != '')
+    `);
+
     const [rows] = salesHasFarmerId
       ? await db.execute(`
-          SELECT f.*, 
-                 COUNT(DISTINCT s.id) as total_purchases,
-                 COALESCE(SUM(s.total_amount), 0) as total_spent,
-                 MAX(s.sale_date) as last_purchase_date
+          SELECT 
+            f.*, 
+            (COUNT(DISTINCT s.id) + COALESCE(
+              (SELECT COUNT(DISTINCT o.id) FROM orders o JOIN users u ON o.user_id = u.id WHERE u.email = f.email)
+            , 0)) as total_purchases,
+            (COALESCE(SUM(s.total_amount), 0) + COALESCE(
+              (SELECT SUM(o.total_amount) FROM orders o JOIN users u ON o.user_id = u.id WHERE u.email = f.email)
+            , 0)) as total_spent,
+            GREATEST(
+              COALESCE(MAX(s.sale_date), '1000-01-01'), 
+              COALESCE((SELECT MAX(o.created_at) FROM orders o JOIN users u ON o.user_id = u.id WHERE u.email = f.email), '1000-01-01')
+            ) as last_purchase_date
           FROM farmers f
           LEFT JOIN sales s ON f.id = s.farmer_id
           GROUP BY f.id
           ORDER BY f.name ASC
         `)
       : await db.execute(`
-          SELECT f.*, 
-                 0 as total_purchases,
-                 0 as total_spent,
-                 NULL as last_purchase_date
+          SELECT 
+            f.*, 
+            COALESCE((SELECT COUNT(DISTINCT o.id) FROM orders o JOIN users u ON o.user_id = u.id WHERE u.email = f.email), 0) as total_purchases,
+            COALESCE((SELECT SUM(o.total_amount) FROM orders o JOIN users u ON o.user_id = u.id WHERE u.email = f.email), 0) as total_spent,
+            COALESCE((SELECT MAX(o.created_at) FROM orders o JOIN users u ON o.user_id = u.id WHERE u.email = f.email), NULL) as last_purchase_date
           FROM farmers f
           ORDER BY f.name ASC
         `);
-    res.json(rows);
+
+    // Clean up dummy GREATEST fallback dates if no purchases exist
+    const processedRows = rows.map(row => {
+      if (row.last_purchase_date && row.last_purchase_date.toString().includes('1000')) {
+        row.last_purchase_date = null;
+      }
+      return row;
+    });
+
+    res.json(processedRows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1522,8 +1563,26 @@ app.get('/api/farmers/:id', verifyToken, async (req, res) => {
           ORDER BY s.sale_date DESC
         `, [req.params.id])
       : [[]];
+
+    // Get farmer's online orders by matching email
+    let onlineOrders = [];
+    if (farmer.email) {
+      const [oRows] = await db.execute(`
+        SELECT 
+          o.*,
+          u.username as customer_name,
+          GROUP_CONCAT(CONCAT(oi.product_name, ' (x', oi.quantity, ')') SEPARATOR ', ') as items
+        FROM orders o
+        JOIN users u ON o.user_id = u.id
+        LEFT JOIN order_items oi ON o.id = oi.order_id
+        WHERE u.email = ?
+        GROUP BY o.id
+        ORDER BY o.created_at DESC
+      `, [farmer.email]);
+      onlineOrders = oRows;
+    }
     
-    res.json({ ...farmer, sales });
+    res.json({ ...farmer, sales, onlineOrders });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1643,9 +1702,23 @@ app.get('/api/reports/sales', verifyToken, async (req, res) => {
 });
 
 // Create order
-app.post('/api/orders', verifyToken, async (req, res) => {
+app.post('/api/orders', verifyToken, [
+  body('totalAmount').isNumeric().withMessage('Total amount must be a number'),
+  body('shippingAddress').optional({ checkFalsy: true }).isString().trim().escape(),
+  body('paymentMethod').optional({ checkFalsy: true }).isString().trim().escape()
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
   const { items, totalAmount, shippingAddress, paymentMethod } = req.body;
   const userId = req.user.id;
+  const userRole = req.user.role;
+
+  if (userRole === 'admin' || userRole === 'owner') {
+    return res.status(403).json({ error: 'Admins cannot place retail orders' });
+  }
 
   if (!items || items.length === 0) {
     return res.status(400).json({ error: 'Order must have at least one item' });
@@ -1739,6 +1812,90 @@ app.get('/api/orders/:id', verifyToken, async (req, res) => {
 
     const [items] = await db.execute('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
     res.json({ ...order, items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin: Get all orders
+app.get('/api/admin/orders', verifyToken, async (req, res) => {
+  const userRole = req.user.role;
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  try {
+    const [rows] = await db.execute(`
+      SELECT 
+        o.*,
+        u.username as customer_name,
+        u.email as customer_email,
+        GROUP_CONCAT(
+          JSON_OBJECT(
+            'id', oi.product_id,
+            'name', oi.product_name,
+            'quantity', oi.quantity,
+            'price', oi.price_per_unit,
+            'totalPrice', oi.total_price
+          )
+        ) as items_json
+      FROM orders o
+      JOIN users u ON o.user_id = u.id
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+    `);
+
+    const orders = rows.map(row => ({
+      ...row,
+      items: row.items_json ? JSON.parse(`[${row.items_json}]`) : []
+    }));
+
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin: Update order status
+app.put('/api/admin/orders/:id/status', verifyToken, async (req, res) => {
+  const userRole = req.user.role;
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const orderId = req.params.id;
+  const { status, payment_status } = req.body;
+
+  try {
+    const updates = [];
+    const params = [];
+
+    if (status) {
+      updates.push('status = ?');
+      params.push(status);
+    }
+    if (payment_status) {
+      updates.push('payment_status = ?');
+      params.push(payment_status);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No updates provided' });
+    }
+
+    params.push(orderId);
+
+    const [result] = await db.execute(
+      `UPDATE orders SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.json({ message: 'Order updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

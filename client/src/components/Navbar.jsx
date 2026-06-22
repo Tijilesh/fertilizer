@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Package, ShoppingCart, BarChart3, Users, Building, CreditCard, Calculator, Smartphone, AlertTriangle, TrendingUp, LogOut, ChevronLeft, ChevronRight, History, Tractor, Leaf, Sprout, Wheat, Truck, Receipt, PiggyBank, Calendar, Zap, Bell } from 'lucide-react'
+import { Home, Package, ShoppingCart, BarChart3, Users, Building, CreditCard, Calculator, Smartphone, AlertTriangle, TrendingUp, LogOut, ChevronLeft, ChevronRight, History, Tractor, Leaf, Sprout, Wheat, Truck, Receipt, PiggyBank, Calendar, Zap, Bell, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCart } from '../contexts/CartContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -18,15 +18,9 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
   const getNavItemsForRole = (role) => {
     const baseItems = [
       { path: '/dashboard', label: t('dashboard'), icon: Home, roles: ['user', 'owner', 'admin'], color: 'text-blue-600' },
-      {
-        path: '/shop',
-        label: (role === 'owner' || role === 'admin') ? `${t('shop')} (${t('customerView')})` : t('shop'),
-        icon: Leaf,
-        roles: ['user', 'owner', 'admin'],
-        color: 'text-green-600'
-      },
-      { path: '/cart', label: t('cart'), icon: ShoppingCart, roles: ['user', 'owner', 'admin'], badge: getCartItemCount(), color: 'text-orange-600' },
-      { path: '/orders', label: t('orders'), icon: Receipt, roles: ['user', 'owner', 'admin'], color: 'text-purple-600' },
+      { path: '/shop', label: t('shop'), icon: Leaf, roles: ['user'], color: 'text-green-600' },
+      { path: '/cart', label: t('cart'), icon: ShoppingCart, roles: ['user'], badge: getCartItemCount(), color: 'text-orange-600' },
+      { path: '/orders', label: t('orders'), icon: Receipt, roles: ['user'], color: 'text-purple-600' },
       { path: '/survey', label: t('survey') || 'Survey', icon: Zap, roles: ['user', 'owner', 'admin'], color: 'text-pink-600' },
       { path: '/smart-assistant', label: t('smartAssistantNav') || 'Smart Assistant', icon: Zap, roles: ['user', 'owner', 'admin'], color: 'text-purple-600' },
       { path: '/schemes', label: t('govtSchemesNav') || 'Government Schemes', icon: Building, roles: ['user', 'owner', 'admin'], color: 'text-indigo-600' },
@@ -35,6 +29,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
     const adminItems = [
       { path: '/products', label: t('products'), icon: Sprout, roles: ['owner', 'admin'], color: 'text-emerald-600' },
       { path: '/sales', label: t('sales'), icon: TrendingUp, roles: ['owner', 'admin'], color: 'text-indigo-600' },
+      { path: '/manage-orders', label: 'Online Orders', icon: ShoppingBag, roles: ['owner', 'admin'], color: 'text-teal-600' },
       { path: '/customers', label: t('customers'), icon: Users, roles: ['owner', 'admin'], color: 'text-teal-600' },
       { path: '/farmers', label: t('farmers') || 'Farmers', icon: Tractor, roles: ['owner', 'admin'], color: 'text-yellow-600' },
       {
@@ -44,11 +39,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
         roles: ['owner', 'admin'],
         color: 'text-cyan-600'
       },
-      { path: '/payments', label: t('payments'), icon: PiggyBank, roles: ['owner', 'admin'], color: 'text-green-600' },
-      { path: '/accounting', label: t('accounting'), icon: Calculator, roles: ['owner', 'admin'], color: 'text-gray-600' },
       { path: '/stock-expiry', label: t('stock-alerts'), icon: AlertTriangle, roles: ['owner', 'admin'], color: 'text-red-600' },
-      { path: '/mobile-app', label: t('mobile-app'), icon: Smartphone, roles: ['owner', 'admin'], color: 'text-blue-600' },
-      { path: '/analytics', label: t('analytics'), icon: BarChart3, roles: ['owner', 'admin'], color: 'text-violet-600' },
       { path: '/reports', label: t('reports'), icon: Wheat, roles: ['owner', 'admin'], color: 'text-amber-600' },
     ]
 

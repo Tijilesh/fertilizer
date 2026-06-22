@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ShoppingCart,
@@ -6,17 +6,17 @@ import {
   Plus,
   Minus,
   ArrowRight,
-  Search,
-  Truck,
   ShieldCheck,
   CreditCard,
-  Ticket,
-  Calendar,
   AlertCircle,
   Star,
   X,
   Smartphone,
-  Globe
+  Globe,
+  MapPin,
+  CheckCircle2,
+  ChevronDown,
+  Info
 } from 'lucide-react'
 import { useCart } from '../../contexts/CartContext'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -36,12 +36,71 @@ const Cart = () => {
 
   const { t } = useLanguage()
   const [loading, setLoading] = useState(false)
-  const [coupon, setCoupon] = useState('')
-  const [appliedDiscount, setAppliedDiscount] = useState(0)
+  const [isInitializing, setIsInitializing] = useState(true)
+  const [isGeolocating, setIsGeolocating] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState('cod')
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [shippingAddress, setShippingAddress] = useState(localStorage.getItem('profileAddress') || '')
+  const [isEditingAddress, setIsEditingAddress] = useState(!shippingAddress)
+  const [currentStep, setCurrentStep] = useState(2)
 
   const isAdmin = user?.role === 'owner' || user?.role === 'admin'
+
+  // Simulate initial network fetch for skeleton loader
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitializing(false)
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [])
+
+  const handleSetLocation = () => {
+    if (isGeolocating) return; // Prevent spam clicking
+
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser')
+      return
+    }
+
+    setIsGeolocating(true)
+    const toastId = toast.loading('Finding your location...')
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords
+          // Use OpenStreetMap Nominatim for free reverse geocoding
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`)
+          
+          if (!response.ok) throw new Error('Failed to fetch address')
+          
+          const data = await response.json()
+          
+          if (data && data.display_name) {
+            setShippingAddress(data.display_name)
+            localStorage.setItem('profileAddress', data.display_name)
+            setIsEditingAddress(false)
+            toast.success('Location updated successfully!', { id: toastId })
+          } else {
+            throw new Error('Address not found')
+          }
+        } catch (error) {
+          console.error('Geocoding error:', error)
+          toast.error('Could not determine exact address. Please enter manually.', { id: toastId })
+          setIsEditingAddress(true)
+        } finally {
+          setIsGeolocating(false)
+        }
+      },
+      (error) => {
+        console.error('Geolocation error:', error)
+        toast.error('Location access denied. Please enter manually.', { id: toastId })
+        setIsGeolocating(false)
+        setIsEditingAddress(true)
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    )
+  }
 
   const handleQuantityChange = (productId, newQuantity, maxQuantity) => {
     if (newQuantity <= 0) {
@@ -56,23 +115,7 @@ const Cart = () => {
 
   const handleRemoveItem = (productId, productName) => {
     removeFromCart(productId)
-    toast.success(`${productName} ${t('removedFromCart')}`)
-  }
-
-  const handleClearCart = () => {
-    if (window.confirm(t('confirmClearCart'))) {
-      clearCart()
-      toast.success(t('cartCleared'))
-    }
-  }
-
-  const handleApplyCoupon = () => {
-    if (coupon.toUpperCase() === 'FARMER10') {
-      setAppliedDiscount(getCartTotal() * 0.1)
-      toast.success('Coupon Applied: 10% Discount!')
-    } else {
-      toast.error('Invalid Coupon Code')
-    }
+    toast.success(`${productName} removed from cart`)
   }
 
   const executeOrder = async () => {
@@ -85,8 +128,8 @@ const Cart = () => {
           quantity: item.quantity,
           price: item.price
         })),
-        totalAmount: getCartTotal() - appliedDiscount + 50 + (getCartTotal() * 0.18),
-        shippingAddress: 'Default Address',
+        totalAmount: getCartTotal() + 50 + (getCartTotal() * 0.18),
+        shippingAddress: shippingAddress.trim() || 'Default Address',
         paymentMethod: paymentMethod === 'upi' ? 'UPI' : paymentMethod === 'netbanking' ? 'Netbanking' : paymentMethod === 'card' ? 'Credit/Debit Card' : 'Cash On Delivery'
       }
 
@@ -94,9 +137,10 @@ const Cart = () => {
       toast.success(`${t('orderPlacedSuccess')} ${t('orderNumberLabel')}${result.data.orderNumber}`)
       clearCart()
       setShowPaymentModal(false)
+      setCurrentStep(2) // reset for next time
     } catch (error) {
       console.error('Checkout error:', error)
-      toast.error(t('failedToPlaceOrder'))
+      toast.error(error.response?.data?.error || t('failedToPlaceOrder'))
     } finally {
       setLoading(false)
     }
@@ -104,9 +148,17 @@ const Cart = () => {
 
   const handleCheckout = async () => {
     if (isAdmin) {
-      toast.error(t('adminCheckoutDisabled') || 'Checkout is disabled for administrators. Please use Procurement to manage stock.')
+      toast.error(t('adminCheckoutDisabled') || 'Checkout is disabled for administrators.')
       return
     }
+
+    if (shippingAddress.trim().length < 5) {
+      toast.error(t('addressRequired') || 'Please enter a valid delivery address.')
+      setIsEditingAddress(true)
+      return
+    }
+
+    localStorage.setItem('profileAddress', shippingAddress.trim())
 
     if (paymentMethod !== 'cod') {
       setShowPaymentModal(true)
@@ -115,328 +167,371 @@ const Cart = () => {
     }
   }
 
-  if (cartItems.length === 0) {
+  if (isInitializing) {
     return (
-          <div className="flex flex-col items-center justify-center py-24 space-y-8 animate-in fade-in zoom-in duration-700">
-            <div className="relative">
-              <div className="w-48 h-48 bg-gray-100 rounded-full flex items-center justify-center">
-                <ShoppingCart className="h-24 w-24 text-gray-300" />
-              </div>
-              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-white px-6 py-2 rounded-full shadow-lg border-2 border-gray-50 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-500" />
-                <span className="text-xs font-black text-gray-700 uppercase tracking-widest">{t('emptyCart') || 'Cart is Empty'}</span>
-              </div>
-            </div>
-
-    <div className="text-center space-y-2">
-              <h1 className="text-4xl font-black text-gray-900 tracking-tight">{t('addSomethingSpecial')}</h1>
-              <p className="text-gray-500 text-lg font-medium">{t('discoverOurProducts')}</p>
-            </div>
-
-            <Link
-              to="/shop"
-              className="bg-primary-600 text-white px-10 py-5 rounded-2xl font-black text-lg shadow-xl shadow-primary-500/20 hover:bg-primary-700 hover:shadow-primary-500/40 active:scale-95 transition-all flex items-center gap-3 group"
-            >
-              <span>{t('continueShopping')}</span>
-              <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-            </Link>
+      <div className="max-w-7xl mx-auto space-y-6 animate-pulse">
+        <div className="bg-gray-200 h-24 rounded-[2rem] w-full" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-gray-200 h-48 rounded-[2.5rem] w-full" />
+            <div className="bg-gray-200 h-96 rounded-[2.5rem] w-full" />
           </div>
+          <div className="lg:col-span-1">
+            <div className="bg-gray-200 h-96 rounded-[2.5rem] w-full" />
+          </div>
+        </div>
+      </div>
     )
   }
 
-  const subtotal = getCartTotal()
-  const shipping = 50
-  const tax = subtotal * 0.18
-  const total = subtotal - appliedDiscount + shipping + tax
-  const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
+  if (cartItems.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 space-y-8 animate-in fade-in zoom-in duration-700">
+        <div className="relative">
+          <div className="w-48 h-48 bg-gray-100 rounded-full flex items-center justify-center">
+            <ShoppingCart className="h-24 w-24 text-gray-300" />
+          </div>
+          <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-white px-6 py-2 rounded-full shadow-lg border-2 border-gray-50 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-500" />
+            <span className="text-xs font-black text-gray-700 uppercase tracking-widest">{t('emptyCart') || 'Cart is Empty'}</span>
+          </div>
+        </div>
+
+        <div className="text-center space-y-2">
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">{t('addSomethingSpecial') || 'Your cart is feeling light!'}</h1>
+          <p className="text-gray-500 text-lg font-medium">{t('discoverOurProducts') || 'Discover our premium products'}</p>
+        </div>
+
+        <Link
+          to="/shop"
+          className="bg-primary-600 text-white px-10 py-5 rounded-2xl font-black text-lg shadow-xl shadow-primary-500/20 hover:bg-primary-700 hover:shadow-primary-500/40 active:scale-95 transition-all flex items-center gap-3 group"
+        >
+          <span>{t('continueShopping') || 'Continue Shopping'}</span>
+          <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+        </Link>
+      </div>
+    )
+  }
+
+  const mrp = cartItems.reduce((sum, item) => sum + (item.price * 1.5 * item.quantity), 0)
+  const finalPrice = getCartTotal()
+  const totalDiscount = mrp - finalPrice
+  const shipping = finalPrice > 1000 ? 0 : 50
+  const total = finalPrice + shipping
 
   return (
     <>
-        <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Flipkart Stepper Header */}
+        <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-6 flex items-center justify-center mb-8 relative overflow-hidden">
+          <div className="relative flex items-start justify-between w-full max-w-2xl pt-2">
+            
+            {/* Connecting Lines */}
+            <div className="absolute top-[18px] left-[10%] right-[10%] h-0.5 bg-gray-200 z-0"></div>
+            <div className={`absolute top-[18px] left-[10%] h-0.5 bg-primary-600 z-0 transition-all duration-500 ${currentStep === 3 ? 'right-[10%]' : 'right-[50%]'}`}></div>
 
-          {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-gray-200 pb-8">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-100 text-primary-700 rounded-xl text-[10px] font-black uppercase tracking-widest mb-3">
-                <ShoppingCart className="w-3 h-3" />
-                {t('secureCheckout') || 'Secure Checkout'}
+            {/* Step 1: Address */}
+            <div className="relative z-10 flex flex-col items-center gap-3 w-32 cursor-pointer" onClick={() => setCurrentStep(2)}>
+              <div className="w-9 h-9 rounded-full bg-primary-600 text-white flex items-center justify-center shadow-lg ring-8 ring-white">
+                <CheckCircle2 className="w-5 h-5" />
               </div>
-              <h1 className="text-4xl font-black text-gray-900 tracking-tight">{t('shoppingCart')}</h1>
-              <p className="text-gray-500 font-bold mt-1">{itemCount} {t('itemsInYourCart') || 'Items ready for harvest'}</p>
+              <span className="text-xs font-bold text-primary-600 uppercase tracking-widest text-center">Address</span>
             </div>
-
-            <button
-              onClick={handleClearCart}
-              className="bg-white border-2 border-red-50 text-red-600 px-6 py-3 rounded-xl text-sm font-black hover:bg-red-50 hover:border-red-100 transition-all flex items-center justify-center space-x-2 shadow-sm"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>{t('clearCart')}</span>
-            </button>
+            
+            {/* Step 2: Order Summary */}
+            <div className="relative z-10 flex flex-col items-center gap-3 w-32 cursor-pointer" onClick={() => setCurrentStep(2)}>
+              <div className={`w-9 h-9 rounded-full ${currentStep === 3 ? 'bg-primary-600 text-white' : 'bg-primary-600 text-white shadow-lg shadow-primary-600/20'} font-black flex items-center justify-center ring-8 ring-white transition-colors`}>
+                {currentStep === 3 ? <CheckCircle2 className="w-5 h-5" /> : '2'}
+              </div>
+              <span className={`text-xs uppercase tracking-widest text-center ${currentStep === 3 ? 'font-bold text-primary-600' : 'font-black text-gray-900'}`}>Order Summary</span>
+            </div>
+            
+            {/* Step 3: Payment */}
+            <div className="relative z-10 flex flex-col items-center gap-3 w-32">
+              <div className={`w-9 h-9 rounded-full ${currentStep === 3 ? 'bg-primary-600 text-white shadow-lg shadow-primary-600/20' : 'bg-gray-200 text-gray-400'} font-black flex items-center justify-center ring-8 ring-white transition-colors`}>
+                3
+              </div>
+              <span className={`text-xs uppercase tracking-widest text-center ${currentStep === 3 ? 'font-black text-gray-900' : 'font-bold text-gray-400'}`}>Payment</span>
+            </div>
+            
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-            {/* Left: Cart Items List */}
-            <div className="lg:col-span-2 space-y-6">
-              {cartItems.map((item) => (
-                <div key={item.id} className="group glass-card p-6 rounded-[2rem] border-2 border-white hover:border-primary-100 hover:shadow-2xl hover:shadow-primary-100/30 transition-all duration-500 bg-white">
-                  <div className="flex flex-col md:flex-row gap-8">
-                    {/* Item Visual */}
-                    <div className="w-full md:w-32 h-32 bg-gray-50 rounded-2xl flex items-center justify-center relative overflow-hidden flex-shrink-0">
-                      <div className="absolute inset-0 bg-primary-600 opacity-0 group-hover:opacity-[0.03] transition-opacity" />
-                      <ShoppingCart className="w-12 h-12 text-primary-600/20 group-hover:scale-110 transition-transform duration-500" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Left Column (Flipkart Style) */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {currentStep === 2 ? (
+              <>
+                {/* Delivery Address Block */}
+                <div className="glass-card premium-shadow p-8 rounded-[2.5rem] border-2 border-white/50 bg-white group">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary-50 rounded-xl">
+                        <MapPin className="w-5 h-5 text-primary-600" />
+                      </div>
+                      <h3 className="text-gray-500 font-bold uppercase tracking-widest text-xs">Deliver to:</h3>
                     </div>
+                    {!isEditingAddress && (
+                      <button 
+                        onClick={() => setIsEditingAddress(true)}
+                        className="px-6 py-2 rounded-xl border-2 border-gray-100 text-primary-600 font-black text-xs uppercase tracking-widest hover:border-primary-100 hover:bg-primary-50 transition-all"
+                      >
+                        Change
+                      </button>
+                    )}
+                  </div>
 
-                    {/* Item Details */}
-                    <div className="flex-1 flex flex-col justify-between py-2">
-                      <div className="flex justify-between items-start gap-4">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-black text-primary-600 uppercase tracking-widest">{item.type}</span>
-                            {item.quantity >= 10 && <span className="bg-emerald-100 text-emerald-700 text-[8px] font-black px-2 py-0.5 rounded uppercase">Bulk Order</span>}
-                          </div>
-                          <h3 className="text-xl font-black text-gray-900 group-hover:text-primary-600 transition-colors uppercase leading-tight">{item.name}</h3>
-                          <div className="flex items-center gap-4 mt-2">
-                            <div className="flex items-center gap-1">
-                              {[1, 2, 3, 4, 5].map(i => <Star key={i} className="w-3 h-3 text-amber-400 fill-amber-400" />)}
-                            </div>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest border-l pl-4">Premium Quality</span>
-                          </div>
-                        </div>
+                  {isEditingAddress ? (
+                    <div className="mt-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                      <textarea
+                        value={shippingAddress}
+                        onChange={(e) => setShippingAddress(e.target.value)}
+                        placeholder="Enter full delivery address..."
+                        className="w-full bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 font-medium focus:border-primary-500 focus:bg-white outline-none min-h-[100px]"
+                      />
+                      <div className="flex justify-between items-center mt-4">
                         <button
-                          onClick={() => handleRemoveItem(item.id, item.name)}
-                          className="p-3 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                          onClick={handleSetLocation}
+                          disabled={isGeolocating}
+                          className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-100 transition-colors disabled:opacity-50"
                         >
-                          <Trash2 className="w-5 h-5" />
+                          {isGeolocating ? <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /> : <MapPin className="w-4 h-4" />}
+                          Use Current Location
+                        </button>
+                        <div className="flex gap-3">
+                          <button 
+                            onClick={() => setIsEditingAddress(false)}
+                            className="px-6 py-3 rounded-xl bg-gray-100 text-gray-700 font-black hover:bg-gray-200 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button 
+                            onClick={() => {
+                              localStorage.setItem('profileAddress', shippingAddress)
+                              setIsEditingAddress(false)
+                            }}
+                            className="px-6 py-3 rounded-xl bg-primary-600 text-white font-black hover:bg-primary-700 shadow-lg transition-colors"
+                          >
+                            Save Address
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="ml-11">
+                      <h4 className="text-lg font-black text-gray-900 mb-1">{user?.username || 'Guest User'}</h4>
+                      <p className="text-gray-600 font-medium leading-relaxed max-w-md">{shippingAddress || 'No address provided'}</p>
+                      
+                      <div className="mt-6 bg-amber-50 border-2 border-amber-100/50 rounded-2xl p-4 flex items-center justify-between">
+                        <p className="text-amber-800 text-sm font-medium">Help us reach you faster. Please set exact location on map.</p>
+                        <button 
+                          onClick={handleSetLocation}
+                          disabled={isGeolocating}
+                          className="px-4 py-2 bg-white rounded-xl border-2 border-amber-200 text-amber-700 font-black text-xs uppercase tracking-widest hover:bg-amber-100 transition-colors flex items-center gap-2"
+                        >
+                          {isGeolocating ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : null}
+                          {isGeolocating ? 'Locating...' : 'Set Location'}
                         </button>
                       </div>
-
-                      <div className="flex flex-wrap items-center justify-between gap-6 mt-8">
-                        <div className="flex items-center bg-gray-50 rounded-2xl p-1.5 border-2 border-gray-100/50">
-                          <button
-                            onClick={() => handleQuantityChange(item.id, item.quantity - 1, item.quantity)}
-                            className="w-10 h-10 rounded-xl bg-white text-gray-600 flex items-center justify-center hover:bg-primary-50 hover:text-primary-600 active:scale-90 transition-all font-bold shadow-sm"
-                            disabled={item.quantity <= 1}
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <span className="w-12 text-center font-black text-lg text-gray-900">{item.quantity}</span>
-                          <button
-                            onClick={() => handleQuantityChange(item.id, item.quantity + 1, 999)}
-                            className="w-10 h-10 rounded-xl bg-white text-gray-600 flex items-center justify-center hover:bg-primary-50 hover:text-primary-600 active:scale-90 transition-all font-bold shadow-sm"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <div className="text-right">
-                          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">{t('total')}</p>
-                          <p className="text-2xl font-black text-gray-900">
-                            ₹{(item.price * item.quantity).toFixed(0)}
-                          </p>
-                        </div>
-                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
-
-              {/* Delivery Info Professional Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                <div className="p-6 bg-white rounded-3xl border-2 border-gray-100 flex items-start gap-4">
-                  <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl shadow-sm">
-                    <Truck className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest mb-1">{t('shippingDelivery') || 'Shipping & Delivery'}</h4>
-                    <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
-                      Orders placed before 2 PM are processed same-day. Estimated delivery to your farm in 2-3 business days.
-                    </p>
-                  </div>
-                </div>
-                <div className="p-6 bg-white rounded-3xl border-2 border-gray-100 flex items-start gap-4">
-                  <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl shadow-sm">
-                    <ShieldCheck className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest mb-1">{t('qualityGuarantee') || 'Quality Guarantee'}</h4>
-                    <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
-                      100% Genuine agricultural inputs sourcing directly from certified companies. Freshness guaranteed.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Order Summary Sidebar */}
-            <div className="lg:col-span-1">
-              <div className="space-y-6 sticky top-24">
-                {/* Coupon Section */}
-                <div className="glass-card p-6 rounded-3xl border-2 border-white bg-white">
-                  <h3 className="font-black text-gray-900 uppercase text-xs tracking-widest mb-4 flex items-center gap-2">
-                    <Ticket className="w-4 h-4 text-primary-600" />
-                    {t('promoOffer') || 'Apply Promo Code'}
-                  </h3>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. FARMER10"
-                      value={coupon}
-                      onChange={(e) => setCoupon(e.target.value)}
-                      className="flex-1 bg-gray-50 border-2 border-gray-50 rounded-xl px-4 py-3 text-sm font-bold focus:border-primary-500/30 transition-all outline-none"
-                    />
-                    <button
-                      onClick={handleApplyCoupon}
-                      className="bg-gray-900 text-white px-5 py-3 rounded-xl font-black text-xs hover:bg-black transition-all"
-                    >
-                      {t('apply') || 'APPLY'}
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-gray-400 font-bold mt-3 text-center uppercase tracking-tighter">Try code <span className="text-primary-600">FARMER10</span> for extra savings</p>
+                  )}
                 </div>
 
-                {/* Summary Card */}
-                <div className="glass-card p-8 rounded-3xl border-2 border-primary-50 bg-white shadow-2xl shadow-primary-900/5 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary-600/5 rounded-full -mr-16 -mt-16 pointer-events-none" />
+                {/* Cart Items */}
+                <div className="glass-card premium-shadow rounded-[2.5rem] border-2 border-white/50 bg-white overflow-hidden">
+                  <div className="divide-y-2 divide-gray-50">
+                    {cartItems.map((item) => (
+                      <div key={item.id} className="p-8 group hover:bg-gray-50/50 transition-colors">
+                        <div className="flex gap-8">
+                          {/* Left: Image & Qty Dropdown */}
+                          <div className="flex flex-col items-center gap-4">
+                            <div className="w-32 h-32 bg-gray-100 rounded-2xl flex items-center justify-center relative shadow-inner">
+                              <ShoppingCart className="w-12 h-12 text-gray-300" />
+                              <div className="absolute top-2 left-2 bg-white rounded-full p-1 shadow-sm border border-gray-100">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                              </div>
+                            </div>
+                            
+                            <div className="relative w-full">
+                              <select 
+                                value={item.quantity}
+                                onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value), 99)}
+                                className="w-full appearance-none bg-white border-2 border-gray-200 rounded-xl py-2 pl-4 pr-8 text-sm font-black text-gray-700 focus:outline-none focus:border-primary-500 shadow-sm"
+                              >
+                                {[...Array(10)].map((_, i) => (
+                                  <option key={i+1} value={i+1}>Qty: {i+1}</option>
+                                ))}
+                              </select>
+                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                            </div>
+                          </div>
 
-                  <h2 className="text-2xl font-black text-gray-900 mb-8 border-b border-gray-100 pb-4">{t('orderSummary')}</h2>
+                          {/* Right: Item Details */}
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h3 className="text-xl font-black text-gray-900 group-hover:text-primary-600 transition-colors">{item.name}</h3>
+                                <p className="text-sm font-bold text-gray-400 mt-1">{item.type} • Premium Pack</p>
+                                
+                                <div className="flex items-center gap-2 mt-3">
+                                  <div className="flex items-center bg-emerald-500 px-2 py-0.5 rounded-lg text-white">
+                                    <span className="text-xs font-black mr-1">4.5</span>
+                                    <Star className="w-3 h-3 fill-white text-white" />
+                                  </div>
+                                  <span className="text-xs font-bold text-gray-400">(2,143)</span>
+                                </div>
 
-                  <div className="space-y-5">
-                    <div className="flex justify-between items-center group">
-                      <span className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        {t('subtotal')}
-                      </span>
-                      <span className="text-lg font-black text-gray-900">₹{subtotal.toFixed(0)}</span>
-                    </div>
+                                <div className="flex items-baseline gap-3 mt-4">
+                                  <span className="text-sm font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">33% off</span>
+                                  <span className="text-sm font-bold text-gray-400 line-through">₹{(item.price * 1.5).toFixed(0)}</span>
+                                  <span className="text-2xl font-black text-gray-900">₹{item.price.toFixed(0)}</span>
+                                </div>
 
-                    {appliedDiscount > 0 && (
-                      <div className="flex justify-between items-center text-emerald-600 animate-in slide-in-from-right duration-300">
-                        <span className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                          <Ticket className="w-3 h-3" />
-                          {t('discount') || 'Coupon Discount'}
-                        </span>
-                        <span className="text-sm font-black">-₹{appliedDiscount.toFixed(0)}</span>
-                      </div>
-                    )}
+                                <p className="text-sm font-bold text-gray-600 mt-4 flex items-center gap-2">
+                                  Delivery by <span className="text-gray-900">Wed, Jun 24</span> 
+                                  <span className="text-gray-300">|</span> 
+                                  <span className="text-emerald-600 font-black tracking-widest text-[10px] uppercase bg-emerald-50 px-2 py-1 rounded">Free</span>
+                                </p>
+                              </div>
+                            </div>
 
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        {t('shipping')}
-                        <Truck className="w-3 h-3" />
-                      </span>
-                      <span className="text-sm font-black text-gray-900">₹{shipping.toFixed(2)}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('tax')} (18% GST)</span>
-                      <span className="text-sm font-black text-gray-400">₹{tax.toFixed(0)}</span>
-                    </div>
-
-                    <div className="pt-6 border-t-2 border-dashed border-gray-100">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{t('totalPayable') || 'Total Payable'}</p>
-                          <p className="text-4xl font-black text-primary-600 tracking-tight">₹{total.toFixed(0)}</p>
-                        </div>
-                        <div className="text-right flex flex-col items-end">
-                          <div className="bg-emerald-100 text-emerald-700 text-[8px] font-black px-2 py-1 rounded-lg uppercase shadow-sm">
-                            {t('taxIncluded') || 'Tax Included'}
+                            <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
+                              <button 
+                                onClick={() => handleRemoveItem(item.id, item.name)}
+                                className="text-gray-400 font-black text-xs uppercase tracking-widest hover:text-red-500 transition-colors flex items-center gap-2"
+                              >
+                                <Trash2 className="w-4 h-4" /> Remove
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-
-                  {/* Payment Options */}
-                  <div className="mt-8">
-                    <h3 className="font-black text-gray-900 uppercase text-xs tracking-widest mb-4">Payment Method</h3>
-                    <div className="space-y-3">
-                      <label className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${paymentMethod === 'upi' ? 'border-primary-600 bg-primary-50' : 'border-gray-100 hover:border-primary-200 bg-white'}`}>
-                        <div className="flex items-center gap-3">
-                          <input type="radio" name="payment" value="upi" checked={paymentMethod === 'upi'} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 text-primary-600" />
-                          <div className="flex items-center gap-2"><Smartphone className="w-4 h-4 text-gray-500" /><span className="font-bold text-gray-900">UPI / QR Code</span></div>
-                        </div>
-                      </label>
-                      <label className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${paymentMethod === 'netbanking' ? 'border-primary-600 bg-primary-50' : 'border-gray-100 hover:border-primary-200 bg-white'}`}>
-                        <div className="flex items-center gap-3">
-                          <input type="radio" name="payment" value="netbanking" checked={paymentMethod === 'netbanking'} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 text-primary-600" />
-                          <div className="flex items-center gap-2"><Globe className="w-4 h-4 text-gray-500" /><span className="font-bold text-gray-900">Netbanking</span></div>
-                        </div>
-                      </label>
-                      <label className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${paymentMethod === 'card' ? 'border-primary-600 bg-primary-50' : 'border-gray-100 hover:border-primary-200 bg-white'}`}>
-                        <div className="flex items-center gap-3">
-                          <input type="radio" name="payment" value="card" checked={paymentMethod === 'card'} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 text-primary-600" />
-                          <div className="flex items-center gap-2"><CreditCard className="w-4 h-4 text-gray-500" /><span className="font-bold text-gray-900">Credit / Debit Card</span></div>
-                        </div>
-                      </label>
-                      <label className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${paymentMethod === 'cod' ? 'border-primary-600 bg-primary-50' : 'border-gray-100 hover:border-primary-200 bg-white'}`}>
-                        <div className="flex items-center gap-3">
-                          <input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 text-primary-600" />
-                          <div className="flex items-center gap-2"><Truck className="w-4 h-4 text-gray-500" /><span className="font-bold text-gray-900">Cash on Delivery</span></div>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Checkout Button */}
-                  <div className="mt-10 space-y-4">
-                    <button
-                      onClick={handleCheckout}
-                      disabled={loading || isAdmin}
-                      className={`w-full py-5 rounded-2xl font-black text-lg transition-all flex items-center justify-center space-x-3 shadow-xl group disabled:opacity-50 disabled:grayscale active:scale-95 ${isAdmin
-                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed shadow-none'
-                          : 'bg-primary-600 text-white hover:bg-primary-700 hover:shadow-primary-600/30'
-                        }`}
-                    >
-                      {loading ? (
-                        <div className="animate-spin rounded-full h-6 w-6 border-4 border-white border-t-transparent" />
-                      ) : (
-                        <>
-                          <span>{isAdmin ? (t('checkoutDisabled') || 'Admin Restricted') : (t('completePurchase') || 'Complete Purchase')}</span>
-                          {!isAdmin && <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />}
-                        </>
-                      )}
-                    </button>
-
-                    {/* Admin Restricted Message */}
-                    {isAdmin && (
-                      <div className="p-4 bg-amber-50 rounded-2xl border-2 border-amber-100 flex items-start gap-3 animate-in fade-in slide-in-from-bottom duration-500">
-                        <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                        <p className="text-[10px] text-amber-800 leading-relaxed font-black uppercase tracking-tighter">
-                          {t('adminCartWarning') || 'Administrators cannot place retail orders. Manage bulk procurement in '}
-                          <Link to="/purchases" className="text-primary-700 underline font-black">{t('purchases')}</Link>
-                        </p>
+                </div>
+              </>
+            ) : (
+              /* Payment Options Block */
+              <div className="glass-card premium-shadow p-8 rounded-[2.5rem] border-2 border-white/50 bg-white animate-in slide-in-from-right-8 duration-500">
+                <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-3">
+                  <CreditCard className="w-6 h-6 text-primary-600" />
+                  Select Payment Method
+                </h3>
+                <div className="space-y-4">
+                  {[
+                    { id: 'upi', name: 'UPI (GPay, PhonePe, Paytm)', icon: <Smartphone className="w-5 h-5" /> },
+                    { id: 'card', name: 'Credit / Debit Card', icon: <CreditCard className="w-5 h-5" /> },
+                    { id: 'netbanking', name: 'Net Banking', icon: <Globe className="w-5 h-5" /> },
+                    { id: 'cod', name: 'Cash on Delivery', icon: <div className="w-5 h-5 font-black flex items-center justify-center">₹</div> }
+                  ].map((method) => (
+                    <label key={method.id} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all ${paymentMethod === method.id ? 'border-primary-500 bg-primary-50/50' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}>
+                      <input 
+                        type="radio" 
+                        name="paymentMethod" 
+                        value={method.id} 
+                        checked={paymentMethod === method.id} 
+                        onChange={(e) => setPaymentMethod(e.target.value)} 
+                        className="w-5 h-5 text-primary-600 focus:ring-primary-500"
+                      />
+                      <div className={`p-2 rounded-xl ${paymentMethod === method.id ? 'bg-primary-100 text-primary-700' : 'bg-white text-gray-500 shadow-sm'}`}>
+                        {method.icon}
                       </div>
-                    )}
+                      <span className="font-bold text-gray-900">{method.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* Right Column (Price Details Sidebar) */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-24 space-y-6">
+              
+              {/* Price Details Card */}
+              <div className="glass-card premium-shadow p-8 rounded-[2.5rem] border-2 border-white/50 bg-white">
+                <h3 className="font-black text-gray-500 uppercase text-xs tracking-widest mb-6 pb-4 border-b border-gray-100">
+                  Price Details
+                </h3>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center text-sm font-bold text-gray-600">
+                    <span>Price ({cartItems.length} items)</span>
+                    <span>₹{mrp.toFixed(0)}</span>
                   </div>
 
-                  {/* Trust Footer */}
-                  <div className="mt-8 pt-6 border-t border-gray-50 flex items-center justify-center gap-6">
-                    <div className="flex flex-col items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
-                      <ShieldCheck className="w-5 h-5 text-gray-600" />
-                      <span className="text-[8px] font-black uppercase tracking-tighter">Secure</span>
+                  <div className="flex justify-between items-center text-sm font-bold text-gray-600">
+                    <span>Discount</span>
+                    <span className="text-emerald-600">-₹{totalDiscount.toFixed(0)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-sm font-bold text-gray-600">
+                    <span>Delivery Charges</span>
+                    <span className="text-emerald-600">{shipping === 0 ? 'Free' : `₹${shipping}`}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-sm font-bold text-gray-600">
+                    <span className="flex items-center gap-1.5 group relative cursor-help">
+                      Platform Fee
+                      <Info className="w-3.5 h-3.5 text-gray-400 group-hover:text-primary-600 transition-colors" />
+                      <div className="absolute left-0 bottom-full mb-2 w-48 bg-gray-900 text-white text-xs p-3 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 font-medium">
+                        Maintains our secure servers and fast delivery services.
+                        <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900 rotate-45"></div>
+                      </div>
+                    </span>
+                    <span>₹3</span>
+                  </div>
+
+                  <div className="pt-6 mt-4 border-t-2 border-dashed border-gray-200">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xl font-black text-gray-900">Total Amount</span>
+                      <span className="text-2xl font-black text-gray-900">₹{(total + 3).toFixed(0)}</span>
                     </div>
-                    <div className="flex flex-col items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
-                      <CreditCard className="w-5 h-5 text-gray-600" />
-                      <span className="text-[8px] font-black uppercase tracking-tighter">PCI Daily</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
-                      <Calendar className="w-5 h-5 text-gray-600" />
-                      <span className="text-[8px] font-black uppercase tracking-tighter">Support</span>
-                    </div>
+                  </div>
+
+                  <div className="mt-4 bg-emerald-50 text-emerald-700 text-xs font-black uppercase tracking-wider p-4 rounded-2xl text-center border-2 border-emerald-100/50">
+                    You will save ₹{totalDiscount.toFixed(0)} on this order
                   </div>
                 </div>
 
-                <Link
-                  to="/shop"
-                  className="flex items-center justify-center gap-2 text-gray-400 hover:text-primary-600 font-black text-xs uppercase tracking-widest transition-colors py-2"
-                >
-                  <ArrowRight className="w-4 h-4 rotate-180" />
-                  {t('backToShop') || 'Continue Browsing'}
-                </Link>
+                <div className="mt-8">
+                   <button
+                     onClick={() => {
+                       if (currentStep === 2) {
+                         if (shippingAddress.trim().length < 5) {
+                           toast.error(t('addressRequired') || 'Please enter a valid delivery address.')
+                           setIsEditingAddress(true)
+                           return
+                         }
+                         setCurrentStep(3)
+                       } else {
+                         handleCheckout()
+                       }
+                     }}
+                     disabled={loading || isAdmin || (currentStep === 2 && shippingAddress.trim().length < 5)}
+                     className={`w-full py-5 rounded-2xl font-black text-lg transition-all shadow-xl group disabled:opacity-50 active:scale-95 ${isAdmin || (currentStep === 2 && shippingAddress.trim().length < 5) ? 'bg-gray-200 text-gray-500' : 'bg-amber-400 text-gray-900 hover:bg-amber-500 hover:shadow-amber-400/30'}`}
+                   >
+                     {isAdmin ? 'Admin Restricted' : currentStep === 2 ? 'Continue' : 'Place Order'}
+                   </button>
+                </div>
               </div>
+
+              {/* Trust Banner */}
+              <div className="flex items-center gap-4 p-6 glass-card premium-shadow border-2 border-white/50 rounded-[2rem] bg-gray-50">
+                <ShieldCheck className="w-10 h-10 text-gray-400" />
+                <p className="text-xs font-bold text-gray-500 leading-relaxed">
+                  Safe and secure payments. Easy returns. 100% Authentic products.
+                </p>
+              </div>
+
             </div>
           </div>
         </div>
+      </div>
 
       {/* Payment Simulation Modal */}
       {showPaymentModal && (
@@ -452,31 +547,14 @@ const Cart = () => {
               <div>
                 <h3 className="text-2xl font-black text-gray-900 mb-2">Secure Payment</h3>
                 <p className="text-gray-500 font-medium">
-                  {paymentMethod === 'upi' ? 'Scan QR or use UPI App' : paymentMethod === 'netbanking' ? 'Login to your bank account' : 'Enter your card details'} to securely pay <span className="font-bold text-gray-900">₹{total.toFixed(0)}</span>.
+                  {paymentMethod === 'upi' ? 'Scan QR or use UPI App' : paymentMethod === 'netbanking' ? 'Login to your bank account' : 'Enter your card details'} to securely pay <span className="font-bold text-gray-900">₹{(total+3).toFixed(0)}</span>.
                 </p>
               </div>
               <div className="bg-gray-50 rounded-2xl p-6 border-2 border-dashed border-gray-200">
-                {paymentMethod === 'upi' ? (
-                  <div className="space-y-4">
-                     <div className="w-32 h-32 bg-gray-200 mx-auto rounded-xl flex items-center justify-center border-4 border-white shadow-sm">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Mock QR<br/>Code</span>
-                     </div>
-                     <p className="text-sm font-bold text-primary-600">UPI ID: fertilizer_shop@ybl</p>
-                  </div>
-                ) : paymentMethod === 'card' ? (
-                  <div className="space-y-4">
-                     <div className="h-10 bg-gray-200/60 rounded-lg w-full"></div>
-                     <div className="flex gap-4">
-                       <div className="h-10 bg-gray-200/60 rounded-lg w-1/2"></div>
-                       <div className="h-10 bg-gray-200/60 rounded-lg w-1/2"></div>
-                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                     <div className="h-10 bg-gray-200/60 rounded-lg w-full"></div>
-                     <div className="h-10 bg-gray-200/60 rounded-lg w-full"></div>
-                  </div>
-                )}
+                <div className="space-y-4">
+                  <div className="h-10 bg-gray-200/60 rounded-lg w-full"></div>
+                  <div className="h-10 bg-gray-200/60 rounded-lg w-full"></div>
+                </div>
               </div>
               <button
                 onClick={() => {

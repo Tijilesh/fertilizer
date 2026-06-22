@@ -20,6 +20,8 @@ import SaleDetail from '../../pages/sales/SaleDetail'
 import Shop from '../../pages/store/Shop'
 import Cart from '../../pages/store/Cart'
 import OrderHistory from '../../pages/sales/OrderHistory'
+import OrderDetail from '../../pages/sales/OrderDetail'
+import AdminOrders from '../../pages/sales/AdminOrders'
 import Survey from '../../pages/features/Survey'
 import SmartAssistant from '../../pages/features/SmartAssistant'
 import GovernmentSchemes from '../../pages/features/GovernmentSchemes'
@@ -35,9 +37,9 @@ const MainContent = ({ products, sales, onRefresh }) => {
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
+    <div className="min-h-screen bg-gray-50/50">
       <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
-      <main className={`p-8 overflow-auto transition-all duration-300 ${isCollapsed ? 'ml-16' : 'ml-64'}`}>
+      <main className={`p-4 md:p-8 overflow-auto transition-all duration-300 ${isCollapsed ? 'ml-16' : 'ml-64'} min-h-screen`}>
         <Routes>
           <Route path="/" element={<Dashboard products={products} sales={sales} />} />
           <Route path="dashboard" element={<Dashboard products={products} sales={sales} />} />
@@ -46,6 +48,7 @@ const MainContent = ({ products, sales, onRefresh }) => {
           <Route path="shop" element={<Shop products={products} />} />
           <Route path="cart" element={<Cart />} />
           <Route path="orders" element={<OrderHistory />} />
+          <Route path="orders/:id" element={<OrderDetail />} />
           <Route path="survey" element={<Survey />} />
           <Route path="smart-assistant" element={<SmartAssistant />} />
           <Route path="schemes" element={<GovernmentSchemes />} />
@@ -80,6 +83,11 @@ const MainContent = ({ products, sales, onRefresh }) => {
           <Route path="sales/:id" element={
             <ProtectedRoute allowedRoles={['owner', 'admin']}>
               <SaleDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="manage-orders" element={
+            <ProtectedRoute allowedRoles={['owner', 'admin']}>
+              <AdminOrders />
             </ProtectedRoute>
           } />
           <Route path="customers" element={
@@ -140,6 +148,10 @@ const MainContent = ({ products, sales, onRefresh }) => {
           } />
         </Routes>
       </main>
+
+      {/* Global Hero Sparkles Decoration */}
+      <div className="fixed top-0 right-0 w-96 h-96 bg-primary-500/5 blur-[120px] -z-10 animate-pulse pointer-events-none" />
+      <div className="fixed bottom-0 left-0 w-[500px] h-[500px] bg-emerald-500/5 blur-[150px] -z-10 animate-pulse pointer-events-none" />
     </div>
   )
 }
