@@ -27,23 +27,103 @@ const WeatherWidget = () => {
   }
 
   useEffect(() => {
-    // Simulate API call
-    const fetchWeather = async () => {
+    const mapWeatherCode = (code) => {
+      if (code <= 1) return { text: 'Sunny', id: 'sunny', icon: Sun }
+      if (code === 2) return { text: 'Partly Cloudy', id: 'partly-cloudy', icon: Cloud }
+      if (code === 3 || code === 45 || code === 48) return { text: 'Cloudy', id: 'cloudy', icon: Cloud }
+      if (code >= 51 && code <= 67) return { text: 'Rainy', id: 'rainy', icon: CloudRain }
+      if (code >= 71 && code <= 75) return { text: 'Snowy', id: 'cloudy', icon: Cloud }
+      if (code >= 80 && code <= 82) return { text: 'Rain Showers', id: 'rainy', icon: CloudRain }
+      if (code >= 95) return { text: 'Thunderstorm', id: 'rainy', icon: CloudRain }
+      return { text: 'Clear', id: 'sunny', icon: Sun }
+    }
+
+    const getWeatherData = async (lat, lon) => {
       try {
-        setLoading(true)
-        // In a real app, you would call a weather API here
-        // For now, we'll use mock data
-        setTimeout(() => {
-          setWeather(mockWeatherData)
-          setLoading(false)
-        }, 1000)
+        // 1. Get Location Name using reverse geocoding
+        let locName = t('yourFarmArea') || 'Your Area'
+        try {
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)
+          const geoData = await geoRes.json()
+          locName = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.county || geoData.address.state || locName
+        } catch (e) {
+          console.warn("Geocoding failed, using generic location name.")
+        }
+
+        // 2. Fetch from Open-Meteo (Free, no API key required)
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`)
+        const data = await weatherRes.json()
+
+        const current = data.current
+        const daily = data.daily
+        const currentCondition = mapWeatherCode(current.weather_code)
+
+        // 3. Dynamic Farming Advice
+        let advice = t('goodConditionsFertilizer') || 'Good conditions for fertilizer application. Soil moisture is optimal.'
+        if (current.weather_code >= 51 && current.weather_code <= 82) {
+          advice = "Rain expected. Delay fertilizer application to prevent runoff."
+        } else if (current.wind_speed_10m > 20) {
+          advice = "High winds. Avoid spraying liquid fertilizers to prevent drift."
+        } else if (current.temperature_2m > 35) {
+          advice = "High temperatures. Apply fertilizers during cooler morning or evening hours."
+        }
+
+        // 4. Populate 5-day forecast
+        const days = [t('today') || 'Today', t('tomorrow') || 'Tomorrow', t('day3') || 'Day 3', t('day4') || 'Day 4', t('day5') || 'Day 5']
+        const forecast = []
+        for (let i = 0; i < 5; i++) {
+          const dayCode = mapWeatherCode(daily.weather_code[i])
+          forecast.push({
+            day: days[i],
+            temp: Math.round(daily.temperature_2m_max[i]),
+            condition: dayCode.id,
+            icon: dayCode.icon
+          })
+        }
+
+        setWeather({
+          location: locName,
+          temperature: Math.round(current.temperature_2m),
+          condition: currentCondition.text,
+          humidity: Math.round(current.relative_humidity_2m),
+          windSpeed: Math.round(current.wind_speed_10m),
+          precipitation: current.precipitation || 0,
+          forecast: forecast,
+          farmingAdvice: advice
+        })
+        setLoading(false)
+
       } catch (err) {
-        setError(t('failedToLoadWeatherData'))
+        console.error("Weather fetch failed:", err)
+        // Fallback to mock data if API fails
+        setWeather(mockWeatherData)
         setLoading(false)
       }
     }
 
+    const fetchWeather = () => {
+      setLoading(true)
+      
+      // Try to get real location from browser
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            getWeatherData(position.coords.latitude, position.coords.longitude)
+          },
+          (error) => {
+            console.warn("Geolocation denied or failed. Defaulting to New Delhi.", error)
+            getWeatherData(28.6139, 77.2090) // Default to New Delhi if user denies location
+          },
+          { timeout: 10000 }
+        )
+      } else {
+        // Geolocation not supported by browser
+        getWeatherData(28.6139, 77.2090)
+      }
+    }
+
     fetchWeather()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const getWeatherIcon = (condition) => {

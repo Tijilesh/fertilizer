@@ -3,9 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Edit2, Calendar, DollarSign, ShoppingCart, Phone, Mail, MapPin, Sprout, Zap } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
+import FarmerCreditManagement from './FarmerCreditManagement'
+import { useAuth } from '../../contexts/AuthContext'
 
 const FarmerDetail = () => {
   const { id } = useParams()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const [farmer, setFarmer] = useState(null)
   const [sales, setSales] = useState([])
@@ -155,7 +158,9 @@ const FarmerDetail = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Purchases</p>
-              <p className="text-3xl font-bold text-blue-600 mt-2">{farmer.total_purchases || 0}</p>
+              <p className="text-3xl font-bold text-blue-600 mt-2">
+                {sales.length + onlineOrders.length}
+              </p>
             </div>
             <div className="p-3 bg-blue-100 rounded-full">
               <ShoppingCart className="w-6 h-6 text-blue-600" />
@@ -168,7 +173,10 @@ const FarmerDetail = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Total Amount Spent</p>
               <p className="text-3xl font-bold text-green-600 mt-2">
-                ₹{((farmer.total_spent || 0) + onlineOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0)).toLocaleString()}
+                ₹{(
+                  sales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0) + 
+                  onlineOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0)
+                ).toLocaleString()}
               </p>
             </div>
             <div className="p-3 bg-green-100 rounded-full">
@@ -182,9 +190,17 @@ const FarmerDetail = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Last Purchase</p>
               <p className="text-lg font-bold text-orange-600 mt-2">
-                {farmer.last_purchase_date 
-                  ? new Date(farmer.last_purchase_date).toLocaleDateString() 
-                  : 'Never'}
+                {(() => {
+                  const dates = [
+                    ...sales.map(s => new Date(s.sale_date)),
+                    ...onlineOrders.map(o => new Date(o.created_at))
+                  ].filter(d => !isNaN(d.getTime()));
+                  
+                  if (dates.length === 0) return 'Never';
+                  
+                  const lastDate = new Date(Math.max.apply(null, dates));
+                  return lastDate.toLocaleDateString();
+                })()}
               </p>
             </div>
             <div className="p-3 bg-orange-100 rounded-full">
@@ -194,8 +210,13 @@ const FarmerDetail = () => {
         </div>
       </div>
 
+      {/* Credit Management (Admin/Owner only) */}
+      {(user?.role === 'admin' || user?.role === 'owner') && (
+        <FarmerCreditManagement farmer={farmer} onUpdate={fetchFarmerDetails} />
+      )}
+
       {/* Purchase History */}
-      <div className="glass-card premium-shadow p-8 rounded-3xl border">
+      <div className="glass-card premium-shadow p-8 rounded-3xl border mt-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Purchase History</h2>
         
         {sales && sales.length > 0 ? (

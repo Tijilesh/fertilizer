@@ -118,16 +118,60 @@ const OrderDetail = () => {
             </div>
 
             <div className="mt-8 pt-6 border-t border-gray-100">
+              <h3 className="font-black text-gray-500 uppercase text-xs tracking-widest mb-4">Tax Invoice Summary</h3>
+              
               <div className="flex justify-between items-center mb-2">
                 <span className="text-gray-500 font-bold">Subtotal</span>
-                <span className="font-black text-gray-900">₹{parseFloat(order.total_amount || 0).toFixed(2)}</span>
+                <span className="font-black text-gray-900">₹{parseFloat(order.subtotal || order.total_amount || 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-gray-500 font-bold">Shipping</span>
-                <span className="font-black text-green-600">Free</span>
-              </div>
+              
+              {parseFloat(order.coupon_discount) > 0 && (
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-500 font-bold">Coupon Discount</span>
+                  <span className="font-black text-emerald-600">-₹{parseFloat(order.coupon_discount).toFixed(2)}</span>
+                </div>
+              )}
+
+              {parseFloat(order.cgst_amount) > 0 && (
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-500 font-bold">Taxable Value</span>
+                  <span className="font-black text-gray-900">₹{(parseFloat(order.subtotal || 0) - parseFloat(order.coupon_discount || 0)).toFixed(2)}</span>
+                </div>
+              )}
+
+              {parseFloat(order.cgst_amount) > 0 && (
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-500 font-bold">CGST (9%)</span>
+                  <span className="font-black text-gray-700">₹{parseFloat(order.cgst_amount).toFixed(2)}</span>
+                </div>
+              )}
+              {parseFloat(order.sgst_amount) > 0 && (
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-500 font-bold">SGST (9%)</span>
+                  <span className="font-black text-gray-700">₹{parseFloat(order.sgst_amount).toFixed(2)}</span>
+                </div>
+              )}
+              
+              {order.purchase_type !== 'in-store' && (
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-500 font-bold">Shipping & Platform Fee</span>
+                  <span className="font-black text-gray-700">
+                    {parseFloat(order.total_amount) > 1000 ? '₹3.00' : '₹53.00'}
+                  </span>
+                </div>
+              )}
+
+              {parseFloat(order.rounding_adjustment) !== 0 && !isNaN(parseFloat(order.rounding_adjustment)) && (
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-gray-500 font-bold">Rounding Adjustment</span>
+                  <span className="font-black text-gray-500">
+                    {parseFloat(order.rounding_adjustment) > 0 ? '+' : ''}{parseFloat(order.rounding_adjustment).toFixed(2)}
+                  </span>
+                </div>
+              )}
+
               <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                <span className="text-lg font-black text-gray-900">Total Amount</span>
+                <span className="text-lg font-black text-gray-900">Total Payable</span>
                 <span className="text-3xl font-black text-primary-600">₹{parseFloat(order.total_amount || 0).toFixed(2)}</span>
               </div>
             </div>
@@ -156,6 +200,12 @@ const OrderDetail = () => {
                 <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">Method</p>
                 <p className="font-bold text-gray-800 uppercase">{order.payment_method || 'COD'}</p>
               </div>
+              {order.utr_number && (
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">UTR Number</p>
+                  <p className="font-bold text-gray-800 tracking-widest bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">{order.utr_number}</p>
+                </div>
+              )}
               <div>
                 <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">Status</p>
                 <span className={`inline-block px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest ${order.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>

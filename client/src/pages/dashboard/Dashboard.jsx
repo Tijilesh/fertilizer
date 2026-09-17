@@ -203,11 +203,25 @@ const Dashboard = ({ products, sales }) => {
             </div>
             <div className="flex justify-end gap-3 mt-8">
               <button onClick={() => setShowProfileModal(false)} className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
-              <button onClick={() => {
-                localStorage.setItem('profilePhone', profileData.phone)
-                localStorage.setItem('profileAddress', profileData.address)
-                toast.success('Profile updated successfully!')
-                setShowProfileModal(false)
+              <button onClick={async () => {
+                try {
+                  const res = await api.get('/users/profile')
+                  const currentProfile = res.data
+                  await api.put('/users/profile', {
+                    name: profileData.name,
+                    phone: profileData.phone,
+                    location: profileData.address,
+                    email: currentProfile.email,
+                    farm_size: currentProfile.farm_size,
+                    crop_type: currentProfile.crop_type
+                  })
+                  localStorage.setItem('profilePhone', profileData.phone)
+                  localStorage.setItem('profileAddress', profileData.address)
+                  toast.success('Profile updated successfully!')
+                  setShowProfileModal(false)
+                } catch (err) {
+                  toast.error(err.response?.data?.error || 'Failed to update profile on server')
+                }
               }} className="px-5 py-2.5 bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 shadow-lg shadow-primary-500/30 transition-all">Save Changes</button>
             </div>
           </div>
@@ -408,6 +422,53 @@ const Dashboard = ({ products, sales }) => {
           })}
         </div>
 
+        {/* Products Grid */}
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            {selectedCategory === 'all' ? t('allProducts') : `${selectedCategory} ${t('productsCountLabel')}`}
+            {searchTerm && ` - "${searchTerm}"`}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredProducts.slice(0, 8).map((product) => (
+              <div key={product.id} className="border-2 rounded-2xl p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded">
+                    {product.type}
+                  </span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded ${product.quantity > 10 ? 'text-green-600 bg-green-100' :
+                    product.quantity > 5 ? 'text-yellow-600 bg-yellow-100' :
+                      'text-red-600 bg-red-100'
+                    }`}>
+                    {product.quantity > 10 ? t('inStock') :
+                      product.quantity > 5 ? t('limitedStock') : t('lowStock')}
+                  </span>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-1">{product.name}</h4>
+                {product.description && (
+                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+                )}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xl font-bold text-green-600">₹{product.price}</span>
+                  <span className="text-sm text-gray-500">{t('stock')}: {product.quantity}</span>
+                </div>
+                <Link
+                  to="/shop"
+                  className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors duration-200 text-center block"
+                >
+                  {t('viewDetails')}
+                </Link>
+              </div>
+            ))}
+          </div>
+          {filteredProducts.length === 0 && (
+            <div className="text-center py-8">
+              <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <h4 className="text-lg font-medium text-gray-900 mb-2">{t('noProductsFoundTitle')}</h4>
+              <p className="text-gray-500">{t('adjustSearchCategory')}</p>
+            </div>
+          )}
+        </div>
+
         {/* Recent Orders & Quick Reorder */}
         {userOrders.length > 0 && (
           <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
@@ -545,53 +606,6 @@ const Dashboard = ({ products, sales }) => {
             </button>
           </div>
         </div>
-
-        {/* Products Grid */}
-        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            {selectedCategory === 'all' ? t('allProducts') : `${selectedCategory} ${t('productsCountLabel')}`}
-            {searchTerm && ` - "${searchTerm}"`}
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredProducts.slice(0, 8).map((product) => (
-              <div key={product.id} className="border-2 rounded-2xl p-4 hover:shadow-md transition-shadow duration-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded">
-                    {product.type}
-                  </span>
-                  <span className={`text-xs font-medium px-2 py-1 rounded ${product.quantity > 10 ? 'text-green-600 bg-green-100' :
-                    product.quantity > 5 ? 'text-yellow-600 bg-yellow-100' :
-                      'text-red-600 bg-red-100'
-                    }`}>
-                    {product.quantity > 10 ? t('inStock') :
-                      product.quantity > 5 ? t('limitedStock') : t('lowStock')}
-                  </span>
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-1">{product.name}</h4>
-                {product.description && (
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
-                )}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xl font-bold text-green-600">₹{product.price}</span>
-                  <span className="text-sm text-gray-500">{t('stock')}: {product.quantity}</span>
-                </div>
-                <Link
-                  to="/shop"
-                  className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors duration-200 text-center block"
-                >
-                  {t('viewDetails')}
-                </Link>
-              </div>
-            ))}
-          </div>
-          {filteredProducts.length === 0 && (
-            <div className="text-center py-8">
-              <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h4 className="text-lg font-medium text-gray-900 mb-2">{t('noProductsFoundTitle')}</h4>
-              <p className="text-gray-500">{t('adjustSearchCategory')}</p>
-            </div>
-          )}
-        </div>
         {renderModals()}
       </div>
     )
@@ -659,7 +673,7 @@ const Dashboard = ({ products, sales }) => {
         <div className="glass-card p-8 rounded-[2rem] border-2 border-white/50 shadow-xl hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">{t('totalFarmers') || 'Total Farmers'}</p>
+              <p className="text-sm font-medium text-gray-600">Total Farmers</p>
               <p className="text-2xl font-bold text-gray-900">{totalFarmers}</p>
             </div>
             <div className="p-3 bg-purple-100 rounded-full">
@@ -713,7 +727,7 @@ const Dashboard = ({ products, sales }) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-blue-600">{t('efficiencyScore')}</p>
-              <p className="text-2xl font-bold text-gray-900">94%</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.efficiencyScore ?? 94}%</p>
             </div>
             <div className="p-3 bg-blue-100 rounded-full">
               <Zap className="h-6 w-6 text-blue-600" />
@@ -721,15 +735,65 @@ const Dashboard = ({ products, sales }) => {
           </div>
           <div className="mt-2 flex items-center text-xs text-blue-600 font-medium">
             <TrendingUp className="w-3 h-3 mr-1" />
-            +4% {t('fromLastMonth')}
+            {stats.efficiencyGrowth >= 0 ? '+' : ''}{stats.efficiencyGrowth ?? 4}% {t('fromLastMonth')}
           </div>
         </div>
       </div>
 
 
 
+      {/* Alerts and Notifications */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Low Stock Alerts */}
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">{t('lowStockAlerts')}</h3>
+            <AlertTriangle className="h-5 w-5 text-orange-500" />
+          </div>
+          <div className="space-y-3">
+            {lowStockItems.map((item) => (
+              <div key={item.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{item.name}</p>
+                  <p className="text-sm text-gray-600">{t('quantity')}: {item.quantity}</p>
+                </div>
+                <span className="text-sm font-medium text-orange-600">{t('lowStock')}</span>
+              </div>
+            ))}
+            {lowStockItems.length === 0 && (
+              <p className="text-gray-500 text-center py-4">{t('noLowStockItems')}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Credit Reminders */}
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">{t('creditReminders')}</h3>
+            <CreditCard className="h-5 w-5 text-blue-500" />
+          </div>
+          <div className="space-y-3">
+            {creditReminders.map((reminder) => (
+              <div key={reminder.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{reminder.customer_name || reminder.customer}</p>
+                  <p className="text-sm text-gray-600">{t('due')}: {new Date(reminder.due_date || reminder.dueDate).toLocaleDateString()}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium text-gray-900">₹{reminder.amount}</p>
+                  <span className={`text-sm font-medium ${reminder.status === 'overdue' ? 'text-red-600' : 'text-orange-600'
+                    }`}>
+                    {reminder.status === 'overdue' ? t('overdueLabel') : t('dueSoon')}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Quick Actions Panel */}
-      <div className="mb-6">
+      <div className="mb-6 mt-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <Zap className="w-5 h-5 mr-2 text-amber-500" />
           {t('smartQuickActions')}
@@ -774,99 +838,8 @@ const Dashboard = ({ products, sales }) => {
         </div>
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Sales Chart */}
-        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('monthlySales')}</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={dynamicSalesChartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} />
-              <Bar dataKey="sales" fill="#3B82F6" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Product Categories */}
-        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('productCategoriesLabel')}</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={dynamicCategoryChartData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {dynamicCategoryChartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Alerts and Notifications */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Low Stock Alerts */}
-        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">{t('lowStockAlerts')}</h3>
-            <AlertTriangle className="h-5 w-5 text-orange-500" />
-          </div>
-          <div className="space-y-3">
-            {lowStockItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-gray-900">{item.name}</p>
-                  <p className="text-sm text-gray-600">{t('quantity')}: {item.quantity}</p>
-                </div>
-                <span className="text-sm font-medium text-orange-600">{t('lowStock')}</span>
-              </div>
-            ))}
-            {lowStockItems.length === 0 && (
-              <p className="text-gray-500 text-center py-4">{t('noLowStockItems')}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Credit Reminders */}
-        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">{t('creditReminders')}</h3>
-            <CreditCard className="h-5 w-5 text-blue-500" />
-          </div>
-          <div className="space-y-3">
-            {creditReminders.map((reminder) => (
-              <div key={reminder.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-gray-900">{reminder.customer}</p>
-                  <p className="text-sm text-gray-600">{t('due')}: {reminder.dueDate}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-medium text-gray-900">₹{reminder.amount}</p>
-                  <span className={`text-sm font-medium ${reminder.status === 'overdue' ? 'text-red-600' : 'text-orange-600'
-                    }`}>
-                    {reminder.status === 'overdue' ? t('overdueLabel') : t('dueSoon')}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Recent Transactions */}
-      <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
+      <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300 mb-6 mt-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">{t('recentTransactions')}</h3>
           <BarChart3 className="h-5 w-5 text-gray-500" />
@@ -920,6 +893,47 @@ const Dashboard = ({ products, sales }) => {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Sales Chart */}
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('monthlySales')}</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={dynamicSalesChartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} />
+              <Bar dataKey="sales" fill="#3B82F6" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Product Categories */}
+        <div className="glass-card premium-shadow p-8 rounded-[2rem] border-2 border-white/50 hover:border-primary-100 hover:shadow-2xl transition-all duration-300">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('productCategoriesLabel')}</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={dynamicCategoryChartData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {dynamicCategoryChartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
       </div>
       {renderModals()}

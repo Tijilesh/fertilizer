@@ -11,6 +11,7 @@ const AddSale = ({ products, onSuccess }) => {
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_phone: '',
+    payment_status: 'Paid Now',
     payment_method: 'Cash'
   })
   const [selectedItems, setSelectedItems] = useState([])
@@ -95,7 +96,8 @@ const AddSale = ({ products, onSuccess }) => {
         customer_phone: formData.customer_phone,
         items: selectedItems,
         total_amount: calculateTotal(),
-        payment_method: formData.payment_method
+        payment_status: formData.payment_status,
+        payment_method: formData.payment_status === 'Paid Now' ? formData.payment_method : null
       })
 
       onSuccess()
@@ -153,21 +155,44 @@ const AddSale = ({ products, onSuccess }) => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('paymentMethod')}
+                Payment Status
               </label>
               <select
-                name="payment_method"
-                value={formData.payment_method}
+                name="payment_status"
+                value={formData.payment_status}
                 onChange={handleFormChange}
                 className="input-field"
               >
-                <option value="Cash">{t('cash') || 'Cash'}</option>
-                <option value="UPI">UPI</option>
-                <option value="Card">{t('card') || 'Card'}</option>
-                <option value="Bank Transfer">{t('transfer') || 'Bank Transfer'}</option>
+                <option value="Paid Now">Paid Now</option>
+                <option value="Pay Later / Credit">Pay Later / Credit</option>
               </select>
             </div>
+
+            {formData.payment_status === 'Paid Now' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {t('paymentMethod')}
+                </label>
+                <select
+                  name="payment_method"
+                  value={formData.payment_method}
+                  onChange={handleFormChange}
+                  className="input-field"
+                >
+                  <option value="Cash">{t('cash') || 'Cash'}</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Card">{t('card') || 'Card'}</option>
+                  <option value="Bank Transfer">{t('transfer') || 'Bank Transfer'}</option>
+                </select>
+              </div>
+            )}
           </div>
+          
+          {formData.payment_status === 'Pay Later / Credit' && (
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+              <strong>Note:</strong> You are recording a credit sale. Ensure the customer has sufficient credit limit. This will not add to your current cash/bank balance.
+            </div>
+          )}
         </div>
 
         {/* Sale Items */}

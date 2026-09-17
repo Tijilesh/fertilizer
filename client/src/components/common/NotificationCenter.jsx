@@ -58,7 +58,7 @@ const NotificationCenter = ({ isOpen, onClose }) => {
                     type: 'info',
                     icon: CreditCard,
                     title: t('overduePayment'),
-                    message: `${item.customer} ${t('overdueOf')} ₹${item.amount}.`,
+                    message: `${item.customer_name} ${t('overdueOf')} ₹${item.amount}.`,
                     time: new Date(),
                     color: 'text-blue-600',
                     bgColor: 'bg-blue-50'

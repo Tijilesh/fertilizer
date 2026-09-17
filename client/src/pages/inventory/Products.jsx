@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Edit, Trash2, Package, Sprout, Leaf, Search, Filter } from 'lucide-react'
+import { Plus, Edit, Trash2, Package, Sprout, Leaf, Search, Filter, Upload } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import api from '../../utils/api'
 import VoiceInputButton from '../../components/common/VoiceInputButton'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -9,6 +10,46 @@ const Products = ({ products, onRefresh }) => {
   const { t } = useLanguage()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState('all')
+  const fileInputRef = useRef(null)
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+        
+        const parsedProducts = data.map(row => ({
+          name: row.name || row.Name || row.NAME,
+          type: row.type || row.Type || row.TYPE || 'Other',
+          price: parseFloat(row.price || row.Price || row.PRICE) || 0,
+          quantity: parseInt(row.quantity || row.Quantity || row.QUANTITY) || 0,
+          supplier: row.supplier || row.Supplier || row.SUPPLIER || '',
+          description: row.description || row.Description || row.DESCRIPTION || ''
+        })).filter(p => p.name && p.price > 0);
+
+        if (parsedProducts.length === 0) {
+          alert('No valid products found in the file. Ensure you have "name" and "price" columns.');
+          return;
+        }
+
+        const res = await api.post('/products/bulk', { products: parsedProducts });
+        alert(`Success: ${res.data.message}`);
+        onRefresh();
+      } catch (err) {
+        console.error('Error importing products:', err);
+        alert('Failed to import products. Check file format.');
+      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsBinaryString(file);
+  };
 
   const productList = Array.isArray(products) ? products : []
 
@@ -55,13 +96,29 @@ const Products = ({ products, onRefresh }) => {
               <p className="text-green-100 mt-1">{t('manageInventoryDesc')}</p>
             </div>
           </div>
-          <Link
-            to="/products/add"
-            className="bg-white text-green-600 px-6 py-3 rounded-xl font-semibold hover:bg-green-50 transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-          >
-            <Plus className="w-5 h-5" />
-            <span>{t('addProduct')}</span>
-          </Link>
+          <div className="flex space-x-3">
+            <input 
+              type="file" 
+              accept=".xlsx, .csv" 
+              className="hidden" 
+              ref={fileInputRef} 
+              onChange={handleFileUpload} 
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-white/20 text-white px-6 py-3 rounded-xl font-semibold hover:bg-white/30 transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            >
+              <Upload className="w-5 h-5" />
+              <span>Import</span>
+            </button>
+            <Link
+              to="/products/add"
+              className="bg-white text-green-600 px-6 py-3 rounded-xl font-semibold hover:bg-green-50 transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            >
+              <Plus className="w-5 h-5" />
+              <span>{t('addProduct')}</span>
+            </Link>
+          </div>
         </div>
       </div>
 

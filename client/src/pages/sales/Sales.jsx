@@ -89,6 +89,9 @@ const Sales = ({ sales, onRefresh }) => {
                     {t('items')}
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-blue-700 uppercase tracking-widest">
+                    {t('type') || 'Type'}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-blue-700 uppercase tracking-widest">
                     {t('method')}
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-blue-700 uppercase tracking-widest">
@@ -120,6 +123,17 @@ const Sales = ({ sales, onRefresh }) => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {sale.items || 'Multiple items'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {sale.sale_type === 'online' ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Online Delivery
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Walk-in Store
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {sale.payment_method || 'Cash'}

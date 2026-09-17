@@ -18,9 +18,11 @@ import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import { CompatibilityChecker } from '../../components/common'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useAuth } from '../../contexts/AuthContext'
 
 const SmartAssistant = () => {
   const { t } = useLanguage()
+  const { user } = useAuth()
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -34,12 +36,14 @@ const SmartAssistant = () => {
   const [isListening, setIsListening] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [farmData, setFarmData] = useState({
-    farmSize: 5,
-    mainCrop: 'Rice',
+    farmSize: user?.farm_size || 5,
+    mainCrop: user?.crop_type || 'Rice',
     soilType: 'Loamy',
     lastFertilizer: 'NPK 20-20-20'
   })
   const [activeTab, setActiveTab] = useState('chat')
+  const [weatherData, setWeatherData] = useState(null)
+  const [dynamicInsights, setDynamicInsights] = useState([])
 
   const messagesEndRef = useRef(null)
 
@@ -50,6 +54,102 @@ const SmartAssistant = () => {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await api.get('/users/profile')
+        const profile = response.data
+        if (profile) {
+          setFarmData(prev => ({
+            ...prev,
+            farmSize: profile.farm_size || prev.farmSize,
+            mainCrop: profile.crop_type || prev.mainCrop,
+          }))
+        }
+      } catch (err) {
+        console.error("Failed to fetch profile:", err)
+      }
+    }
+    
+    if (user) {
+      fetchProfile()
+    }
+  }, [user])
+
+  useEffect(() => {
+    const fetchWeather = async () => {
+      try {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              await getWeatherData(position.coords.latitude, position.coords.longitude)
+            },
+            () => {
+              getWeatherData(28.6139, 77.2090) // Delhi fallback
+            }
+          )
+        } else {
+          getWeatherData(28.6139, 77.2090)
+        }
+      } catch (err) {
+        console.error("Weather fetch failed:", err)
+      }
+    }
+
+    const getWeatherData = async (lat, lon) => {
+      try {
+        let locName = 'Lucknow, UP'
+        try {
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)
+          const geoData = await geoRes.json()
+          locName = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.state || locName
+        } catch(e) {}
+
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,precipitation,weather_code`)
+        const data = await res.json()
+        const current = data.current
+        
+        let condition = 'Clear'
+        if (current.weather_code >= 51 && current.weather_code <= 67) condition = 'Rainy'
+        else if (current.weather_code >= 80 && current.weather_code <= 99) condition = 'Rain Showers'
+        else if (current.weather_code >= 3) condition = 'Cloudy'
+
+        setWeatherData({
+          location: locName,
+          temperature: Math.round(current.temperature_2m),
+          condition: condition,
+          windSpeed: Math.round(current.wind_speed_10m),
+          rainChance: current.precipitation > 0 ? 80 : 5
+        })
+
+        // Generate dynamic insights
+        const insights = []
+        if (current.temperature_2m > 30) {
+          insights.push({ icon: 'temp', text: `Temps rising (${Math.round(current.temperature_2m)}°C). Check irrigation for ${farmData.mainCrop}.` })
+        } else if (current.temperature_2m < 15) {
+          insights.push({ icon: 'temp', text: `Cool temps. Growth for ${farmData.mainCrop} might slow down.` })
+        } else {
+          insights.push({ icon: 'temp', text: `Optimal temperatures for ${farmData.mainCrop} growth.` })
+        }
+
+        if (current.weather_code >= 51) {
+           insights.push({ icon: 'leaf', text: `Rain expected. Delay fertilizer application to prevent runoff.` })
+        } else if (current.wind_speed_10m > 20) {
+           insights.push({ icon: 'leaf', text: `High winds (${Math.round(current.wind_speed_10m)} km/h). Avoid spraying liquid fertilizers.` })
+        } else {
+           insights.push({ icon: 'leaf', text: `Good weather. Ideal time to apply Nitrogen-based fertilizer for ${farmData.mainCrop}.` })
+        }
+        setDynamicInsights(insights)
+
+      } catch(err) {
+         console.error(err)
+      }
+    }
+
+    fetchWeather()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [farmData.mainCrop])
 
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault()
@@ -197,20 +297,20 @@ const SmartAssistant = () => {
               <div className="flex justify-between items-start mb-6 relative z-10">
                 <div>
                   <p className="text-blue-100 text-[10px] font-black uppercase tracking-[0.2em] mb-1">{t('forecast')}</p>
-                  <h3 className="text-2xl font-black">Lucknow, UP</h3>
+                  <h3 className="text-2xl font-black">{weatherData ? weatherData.location : 'Lucknow, UP'}</h3>
                 </div>
                 <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl animate-vibrant">
-                  <Sun className="h-8 w-8 text-yellow-300" />
+                  {weatherData?.condition === 'Rainy' || weatherData?.condition === 'Rain Showers' ? <CloudRain className="h-8 w-8 text-blue-200" /> : <Sun className="h-8 w-8 text-yellow-300" />}
                 </div>
               </div>
               <div className="flex items-end justify-between relative z-10">
                 <div>
-                  <span className="text-4xl font-black tracking-tight">32°C</span>
-                  <p className="text-xs text-blue-100/80 font-medium italic mt-1">{t('sunnyConditions')}</p>
+                  <span className="text-4xl font-black tracking-tight">{weatherData ? weatherData.temperature : 32}°C</span>
+                  <p className="text-xs text-blue-100/80 font-medium italic mt-1">{weatherData ? weatherData.condition : t('sunnyConditions')}</p>
                 </div>
                 <div className="text-right space-y-1">
-                  <p className="flex items-center justify-end text-[11px] font-bold text-blue-50"><CloudRain className="h-3.5 w-3.5 mr-1.5" /> 5% {t('rain')}</p>
-                  <p className="flex items-center justify-end text-[11px] font-bold text-blue-50"><Wind className="h-3.5 w-3.5 mr-1.5" /> 12 km/h</p>
+                  <p className="flex items-center justify-end text-[11px] font-bold text-blue-50"><CloudRain className="h-3.5 w-3.5 mr-1.5" /> {weatherData ? weatherData.rainChance : 5}% {t('rain')}</p>
+                  <p className="flex items-center justify-end text-[11px] font-bold text-blue-50"><Wind className="h-3.5 w-3.5 mr-1.5" /> {weatherData ? weatherData.windSpeed : 12} km/h</p>
                 </div>
               </div>
             </div>
@@ -242,18 +342,29 @@ const SmartAssistant = () => {
                 {t('aiInsights')}
               </h3>
               <div className="space-y-4">
-                <div className="flex space-x-3 p-3 bg-white/40 rounded-2xl border border-white/60">
-                  <div className="p-2 bg-blue-100 rounded-xl">
-                    <Thermometer className="h-4 w-4 text-blue-600" />
+                {dynamicInsights.length > 0 ? dynamicInsights.map((insight, idx) => (
+                  <div key={idx} className="flex space-x-3 p-3 bg-white/40 rounded-2xl border border-white/60">
+                    <div className={`p-2 rounded-xl ${insight.icon === 'temp' ? 'bg-blue-100' : 'bg-emerald-100'}`}>
+                      {insight.icon === 'temp' ? <Thermometer className="h-4 w-4 text-blue-600" /> : <Leaf className="h-4 w-4 text-emerald-600" />}
+                    </div>
+                    <p className="text-[11px] text-blue-800 font-bold leading-tight self-center">{insight.text}</p>
                   </div>
-                  <p className="text-[11px] text-blue-800 font-bold leading-tight self-center">Temps rising. Check irrigation for {farmData.mainCrop}.</p>
-                </div>
-                <div className="flex space-x-3 p-3 bg-white/40 rounded-2xl border border-white/60">
-                  <div className="p-2 bg-emerald-100 rounded-xl">
-                    <Leaf className="h-4 w-4 text-emerald-600" />
-                  </div>
-                  <p className="text-[11px] text-blue-800 font-bold leading-tight self-center">Apply Nitrogen-based fertilizer before next rain.</p>
-                </div>
+                )) : (
+                  <>
+                    <div className="flex space-x-3 p-3 bg-white/40 rounded-2xl border border-white/60">
+                      <div className="p-2 bg-blue-100 rounded-xl">
+                        <Thermometer className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <p className="text-[11px] text-blue-800 font-bold leading-tight self-center">Temps rising. Check irrigation for {farmData.mainCrop}.</p>
+                    </div>
+                    <div className="flex space-x-3 p-3 bg-white/40 rounded-2xl border border-white/60">
+                      <div className="p-2 bg-emerald-100 rounded-xl">
+                        <Leaf className="h-4 w-4 text-emerald-600" />
+                      </div>
+                      <p className="text-[11px] text-blue-800 font-bold leading-tight self-center">Apply Nitrogen-based fertilizer before next rain.</p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

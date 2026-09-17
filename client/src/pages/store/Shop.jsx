@@ -11,9 +11,6 @@ import {
   LayoutGrid,
   Star,
   Eye,
-  Zap,
-  ChevronRight,
-  TrendingUp,
   Award,
   Sparkles
 } from 'lucide-react'
@@ -23,7 +20,6 @@ import { useAuth } from '../../contexts/AuthContext'
 import Sidebar from '../../components/Navbar'
 import ProductDetailModal from '../../components/shop/ProductDetailModal'
 import toast from 'react-hot-toast'
-import { DEMO_FEATURED_DEALS, DEMO_PROMO_BANNERS } from '../../data/demoData'
 
 const Shop = ({ products }) => {
   const navigate = useNavigate()
@@ -36,17 +32,8 @@ const Shop = ({ products }) => {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [activeBanner, setActiveBanner] = useState(0)
 
   const isAdmin = user?.role === 'owner' || user?.role === 'admin'
-
-  // Auto-rotate banner
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setActiveBanner(prev => (prev + 1) % DEMO_PROMO_BANNERS.length)
-    }, 5000)
-    return () => clearInterval(timer)
-  }, [])
 
   const productList = Array.isArray(products) ? products : []
   const productTypes = ['all', ...new Set(productList.map(p => p.type).filter(Boolean))]
@@ -132,42 +119,7 @@ const Shop = ({ products }) => {
             </div>
           </div>
 
-          {/* Promo Carousel */}
-          <div className="relative h-64 md:h-80 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-primary-900/10 group">
-            {DEMO_PROMO_BANNERS.map((banner, idx) => (
-              <div
-                key={banner.id}
-                className={`absolute inset-0 transition-all duration-1000 transform ${idx === activeBanner ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full'} bg-gradient-to-r ${banner.color} p-8 md:p-12 flex items-center`}
-              >
-                <div className="relative z-10 max-w-lg space-y-4">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-white text-xs font-bold uppercase tracking-widest">
-                    <Zap className="w-3 h-3 fill-current" />
-                    {t('specialOffer') || 'Limited Time Offer'}
-                  </div>
-                  <h2 className="text-3xl md:text-5xl font-black text-white leading-tight">{banner.title}</h2>
-                  <p className="text-white/80 text-lg font-medium">{banner.description}</p>
-                  <button className="bg-white text-primary-600 px-8 py-3 rounded-xl font-black hover:bg-opacity-90 transition-all flex items-center gap-2 group/btn">
-                    {t('shopNow') || 'Explore Now'}
-                    <ChevronRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
-                  </button>
-                </div>
-                <div className="absolute right-0 md:right-12 top-1/2 -translate-y-1/2 text-9xl md:text-[15rem] opacity-20 pointer-events-none transform rotate-12 transition-transform duration-1000 group-hover:rotate-0">
-                  {banner.icon}
-                </div>
-              </div>
-            ))}
 
-            {/* Banner Pagination */}
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
-              {DEMO_PROMO_BANNERS.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setActiveBanner(idx)}
-                  className={`h-2 rounded-full transition-all duration-300 ${idx === activeBanner ? 'w-8 bg-white' : 'w-2 bg-white/40'}`}
-                />
-              ))}
-            </div>
-          </div>
 
           {/* Category Pills */}
           <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
@@ -185,37 +137,7 @@ const Shop = ({ products }) => {
             ))}
           </div>
 
-          {/* Featured Deals Section */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-2xl font-black text-gray-900 flex items-center gap-3">
-                <TrendingUp className="w-6 h-6 text-primary-600" />
-                {t('featuredDeals') || 'Hot Deals for Farmers'}
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {DEMO_FEATURED_DEALS.map(deal => (
-                <div key={deal.id} className="group relative overflow-hidden glass-card p-6 rounded-[2rem] border-2 border-transparent hover:border-primary-100 hover:shadow-2xl hover:shadow-primary-600/10 transition-all duration-500 bg-white">
-                  <div className="absolute top-4 right-4 bg-red-100 text-red-600 text-[10px] font-black px-2 py-1 rounded-lg uppercase">
-                    {deal.discount}% {t('off') || 'OFF'}
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="w-24 h-24 bg-gray-50 rounded-2xl flex items-center justify-center text-4xl group-hover:scale-110 transition-transform duration-500">
-                      {deal.image}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <span className="text-[10px] font-bold text-primary-600 uppercase tracking-widest">{deal.tag}</span>
-                      <h4 className="font-black text-gray-900 group-hover:text-primary-600 transition-colors uppercase leading-tight">{deal.name}</h4>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xl font-black text-gray-900">₹{deal.price}</span>
-                        <span className="text-sm text-gray-400 line-through">₹{deal.originalPrice}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+
 
           {/* Main Product Grid */}
           <div className="space-y-8 pb-12">

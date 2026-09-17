@@ -45,6 +45,34 @@ const AdminOrders = () => {
     }
   }
 
+  const handleConvertToCredit = async () => {
+    if (!selectedOrder) return
+    try {
+      await api.put(`/admin/orders/${selectedOrder.id}/convert-credit`)
+      toast.success('Converted to Credit successfully')
+      fetchOrders()
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to convert to credit')
+    } finally {
+      setPromptOpen(false)
+      setSelectedOrder(null)
+    }
+  }
+
+  const handleMarkPaid = async () => {
+    if (!selectedOrder) return
+    try {
+      await api.put(`/admin/orders/${selectedOrder.id}/mark-paid`)
+      toast.success('Marked as paid successfully')
+      fetchOrders()
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to mark as paid')
+    } finally {
+      setPromptOpen(false)
+      setSelectedOrder(null)
+    }
+  }
+
   const filteredOrders = orders.filter(order => {
     const matchesSearch = 
       (order.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -62,7 +90,9 @@ const AdminOrders = () => {
       case 'shipped':
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-blue-100 text-blue-800"><Truck className="w-3 h-3 mr-1" /> Shipped</span>
       case 'processing':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-orange-100 text-orange-800"><Clock className="w-3 h-3 mr-1" /> Processing</span>
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-emerald-100 text-emerald-800"><Clock className="w-3 h-3 mr-1" /> Processing</span>
+      case 'pending_verification':
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-orange-100 text-orange-800"><Clock className="w-3 h-3 mr-1" /> Verifying UTR</span>
       case 'cancelled':
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-red-100 text-red-800"><Clock className="w-3 h-3 mr-1" /> Cancelled</span>
       default:
@@ -96,8 +126,8 @@ const AdminOrders = () => {
               className="w-full pl-12 pr-4 py-3 bg-white/50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-300 outline-none shadow-sm font-medium text-sm"
             />
           </div>
-          <div className="flex gap-2 bg-gray-100/50 p-1 rounded-xl w-full md:w-auto">
-            {['all', 'pending', 'processing', 'shipped', 'delivered'].map(status => (
+          <div className="flex gap-2 bg-gray-100/50 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
+            {['all', 'pending_verification', 'pending', 'processing', 'shipped', 'delivered'].map(status => (
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
@@ -146,6 +176,9 @@ const AdminOrders = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-black text-teal-600">₹{(parseFloat(order.total_amount) || 0).toFixed(2)}</div>
                         <div className="text-xs text-gray-500 font-bold uppercase mt-1">{order.payment_method}</div>
+                        {order.utr_number && (
+                          <div className="text-[10px] text-gray-500 font-black tracking-widest mt-1 bg-gray-100 inline-block px-2 py-1 rounded">UTR: {order.utr_number}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(order.status)}
@@ -182,8 +215,8 @@ const AdminOrders = () => {
             <h3 className="text-xl font-black text-gray-900 mb-2">Update Order Status</h3>
             <p className="text-sm text-gray-500 font-medium mb-6">Order #{selectedOrder.order_number} for {selectedOrder.customer_name}</p>
             
-            <div className="space-y-3">
-              {['pending', 'processing', 'shipped', 'delivered', 'cancelled'].map(s => (
+            <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+              {['pending_verification', 'pending', 'processing', 'shipped', 'delivered', 'cancelled'].map(s => (
                 <button
                   key={s}
                   onClick={() => handleUpdateStatus(s)}
@@ -197,6 +230,28 @@ const AdminOrders = () => {
                 </button>
               ))}
             </div>
+            
+            {(selectedOrder.payment_method === 'Cash on Delivery' || selectedOrder.payment_method === 'COD') && selectedOrder.payment_status !== 'paid' && selectedOrder.status !== 'delivered' && (
+              <div className="mt-6 pt-6 border-t border-gray-100">
+                <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Payment Actions (COD)</h4>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleMarkPaid}
+                    className="w-full text-left px-4 py-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 transition-all font-bold uppercase tracking-widest text-sm flex items-center justify-between"
+                  >
+                    <span>Mark Paid (Delivered)</span>
+                    <CheckCircle className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={handleConvertToCredit}
+                    className="w-full text-left px-4 py-3 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 transition-all font-bold uppercase tracking-widest text-sm flex items-center justify-between"
+                  >
+                    <span>Convert to Pay Later / Credit</span>
+                    <Clock className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
             
             <button
               onClick={() => {

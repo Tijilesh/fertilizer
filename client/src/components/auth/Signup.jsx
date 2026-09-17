@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Mail, Lock, User, Leaf, Sprout, Tractor, Cloud, Sun, ShieldCheck, RefreshCw } from 'lucide-react'
+import { Mail, Lock, User, Leaf, Sprout, Tractor, Cloud, Sun, ShieldCheck, RefreshCw, Phone } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
@@ -12,9 +12,12 @@ const Signup = () => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: '',
-    role: 'user'
+    role: 'user',
+    shopName: '',
+    shopSlug: ''
   })
 
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
@@ -124,9 +127,12 @@ const Signup = () => {
       const response = await api.post('/auth/register', {
         username: formData.username,
         email: formData.email,
+        phone: formData.phone,
         password: formData.password,
         role: formData.role,
-        otp: otpValue
+        otp: otpValue,
+        shop_name: formData.shopName,
+        shop_slug: formData.shopSlug
       })
 
       const { token, user } = response.data
@@ -253,6 +259,22 @@ const Signup = () => {
                   </div>
                 </div>
 
+                {/* Phone */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Phone className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      name="phone" type="tel" required
+                      value={formData.phone} onChange={handleChange}
+                      className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors bg-gray-50 focus:bg-white"
+                      placeholder="Enter your phone number"
+                    />
+                  </div>
+                </div>
+
                 {/* Passwords */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -285,7 +307,60 @@ const Signup = () => {
                   </div>
                 </div>
 
+                {/* Role Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">I want to</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, role: 'user' })}
+                      className={`py-2 px-4 rounded-lg border flex justify-center items-center gap-2 transition-colors ${formData.role === 'user' ? 'border-green-500 bg-green-50 text-green-700 font-semibold' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      Buy Products
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, role: 'owner' })}
+                      className={`py-2 px-4 rounded-lg border flex justify-center items-center gap-2 transition-colors ${formData.role === 'owner' ? 'border-green-500 bg-green-50 text-green-700 font-semibold' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      Open a Shop
+                    </button>
+                  </div>
+                </div>
 
+                {formData.role === 'owner' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Shop Name</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Sprout className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        name="shopName" type="text" required={formData.role === 'owner'}
+                        value={formData.shopName} onChange={handleChange}
+                        className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors bg-gray-50 focus:bg-white"
+                        placeholder="Enter your shop name"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {formData.role === 'user' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Shop Identifier (Slug)</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <User className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        name="shopSlug" type="text" required={formData.role === 'user'}
+                        value={formData.shopSlug} onChange={handleChange}
+                        className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors bg-gray-50 focus:bg-white"
+                        placeholder="e.g. default-shop"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <button
                   type="submit" disabled={loading}

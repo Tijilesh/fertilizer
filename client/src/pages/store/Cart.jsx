@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { QRCodeSVG } from 'qrcode.react'
 import {
   ShoppingCart,
   Trash2,
@@ -43,11 +44,23 @@ const Cart = () => {
   const [shippingAddress, setShippingAddress] = useState(localStorage.getItem('profileAddress') || '')
   const [isEditingAddress, setIsEditingAddress] = useState(!shippingAddress)
   const [currentStep, setCurrentStep] = useState(2)
+  const [shopUpiId, setShopUpiId] = useState('')
+  const [utrNumber, setUtrNumber] = useState('')
 
   const isAdmin = user?.role === 'owner' || user?.role === 'admin'
 
   // Simulate initial network fetch for skeleton loader
   useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await api.get('/settings')
+        if (res.data && res.data.upi_id) setShopUpiId(res.data.upi_id)
+      } catch (err) {
+        console.error('Failed to fetch settings', err)
+      }
+    }
+    fetchSettings()
+
     const timer = setTimeout(() => {
       setIsInitializing(false)
     }, 800)
@@ -128,9 +141,15 @@ const Cart = () => {
           quantity: item.quantity,
           price: item.price
         })),
-        totalAmount: getCartTotal() + 50 + (getCartTotal() * 0.18),
+        totalAmount: finalPayable,
+        subtotal: subtotal,
+        coupon_discount: couponDiscount,
+        cgst_amount: cgstAmount,
+        sgst_amount: sgstAmount,
+        rounding_adjustment: roundingAdjustment,
         shippingAddress: shippingAddress.trim() || 'Default Address',
-        paymentMethod: paymentMethod === 'upi' ? 'UPI' : paymentMethod === 'netbanking' ? 'Netbanking' : paymentMethod === 'card' ? 'Credit/Debit Card' : 'Cash On Delivery'
+        paymentMethod: paymentMethod === 'upi' ? 'UPI' : paymentMethod === 'Credit' ? 'Credit' : 'Cash On Delivery',
+        utrNumber: paymentMethod === 'upi' ? utrNumber : null
       }
 
       const result = await api.post('/orders', orderData)
@@ -160,7 +179,7 @@ const Cart = () => {
 
     localStorage.setItem('profileAddress', shippingAddress.trim())
 
-    if (paymentMethod !== 'cod') {
+    if (paymentMethod === 'upi') {
       setShowPaymentModal(true)
     } else {
       executeOrder()
@@ -213,11 +232,34 @@ const Cart = () => {
     )
   }
 
-  const mrp = cartItems.reduce((sum, item) => sum + (item.price * 1.5 * item.quantity), 0)
-  const finalPrice = getCartTotal()
-  const totalDiscount = mrp - finalPrice
-  const shipping = finalPrice > 1000 ? 0 : 50
-  const total = finalPrice + shipping
+  // --- Retail Invoice & GST Calculation Engine ---
+  // 1. Line-item totals and Subtotal
+  const mrp = cartItems.reduce((sum, item) => sum + (item.price * 1.5 * item.quantity), 0);
+  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const lineDiscountTotal = mrp - subtotal;
+  
+  // 2. Cart-level Coupon Discount (e.g. 10% seasonal off)
+  let couponDiscount = subtotal * 0.10;
+  if (couponDiscount > subtotal) couponDiscount = subtotal; // Guard against negative values
+  
+  // 3. Taxable Value
+  const taxableValue = subtotal - couponDiscount;
+  
+  // 4. GST Calculation (18% split into 9% CGST and 9% SGST)
+  const cgstAmount = taxableValue * 0.09;
+  const sgstAmount = taxableValue * 0.09;
+  
+  // 5. Additional Fees
+  const shipping = subtotal > 1000 ? 0 : 50;
+  const platformFee = 3;
+  
+  // 6. Unrounded Final Total
+  const unroundedTotal = taxableValue + cgstAmount + sgstAmount + shipping + platformFee;
+  
+  // 7. Rounding Adjustment
+  const finalPayable = Math.round(unroundedTotal);
+  const roundingAdjustment = finalPayable - unroundedTotal;
+  // --- End Calculation Engine ---
 
   return (
     <>
@@ -423,13 +465,18 @@ const Cart = () => {
                 <div className="space-y-4">
                   {[
                     { id: 'upi', name: 'UPI (GPay, PhonePe, Paytm)', icon: <Smartphone className="w-5 h-5" /> },
-                    { id: 'card', name: 'Credit / Debit Card', icon: <CreditCard className="w-5 h-5" /> },
-                    { id: 'netbanking', name: 'Net Banking', icon: <Globe className="w-5 h-5" /> },
-                    { id: 'cod', name: 'Cash on Delivery', icon: <div className="w-5 h-5 font-black flex items-center justify-center">₹</div> }
+                    { id: 'cod', name: 'Cash on Delivery', icon: <div className="w-5 h-5 font-black flex items-center justify-center">₹</div> },
+                    ...(user?.farmer_id ? [{ 
+                      id: 'Credit', 
+                      name: `In-Store Credit (Available: ₹${user.credit_limit - user.current_credit})`, 
+                      icon: <CreditCard className="w-5 h-5" />,
+                      disabled: (user.credit_limit - user.current_credit) < getCartTotal()
+                    }] : [])
                   ].map((method) => (
-                    <label key={method.id} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all ${paymentMethod === method.id ? 'border-primary-500 bg-primary-50/50' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}>
+                    <label key={method.id} className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all ${paymentMethod === method.id ? 'border-primary-500 bg-primary-50/50' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'} ${method.disabled ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
                       <input 
                         type="radio" 
+                        disabled={method.disabled}
                         name="paymentMethod" 
                         value={method.id} 
                         checked={paymentMethod === method.id} 
@@ -455,23 +502,47 @@ const Cart = () => {
               {/* Price Details Card */}
               <div className="glass-card premium-shadow p-8 rounded-[2.5rem] border-2 border-white/50 bg-white">
                 <h3 className="font-black text-gray-500 uppercase text-xs tracking-widest mb-6 pb-4 border-b border-gray-100">
-                  Price Details
+                  Tax Invoice Summary
                 </h3>
 
                 <div className="space-y-4">
                   <div className="flex justify-between items-center text-sm font-bold text-gray-600">
-                    <span>Price ({cartItems.length} items)</span>
-                    <span>₹{mrp.toFixed(0)}</span>
+                    <span>MRP ({cartItems.length} items)</span>
+                    <span>₹{mrp.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between items-center text-sm font-bold text-gray-600">
-                    <span>Discount</span>
-                    <span className="text-emerald-600">-₹{totalDiscount.toFixed(0)}</span>
+                    <span>Line Discounts</span>
+                    <span className="text-emerald-600">-₹{lineDiscountTotal.toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-sm font-black text-gray-800 pt-2 border-t border-gray-100">
+                    <span>Subtotal</span>
+                    <span>₹{subtotal.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between items-center text-sm font-bold text-gray-600">
+                    <span>Coupon Discount (10%)</span>
+                    <span className="text-emerald-600">-₹{couponDiscount.toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-sm font-black text-gray-800 pt-2 border-t border-gray-100">
+                    <span>Taxable Value</span>
+                    <span>₹{taxableValue.toFixed(2)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-sm font-bold text-gray-600">
+                    <span>CGST (9%)</span>
+                    <span>₹{cgstAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm font-bold text-gray-600">
+                    <span>SGST (9%)</span>
+                    <span>₹{sgstAmount.toFixed(2)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-sm font-bold text-gray-600 pt-2 border-t border-gray-100">
                     <span>Delivery Charges</span>
-                    <span className="text-emerald-600">{shipping === 0 ? 'Free' : `₹${shipping}`}</span>
+                    <span className="text-emerald-600">{shipping === 0 ? 'Free' : `₹${shipping.toFixed(2)}`}</span>
                   </div>
 
                   <div className="flex justify-between items-center text-sm font-bold text-gray-600">
@@ -483,18 +554,25 @@ const Cart = () => {
                         <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900 rotate-45"></div>
                       </div>
                     </span>
-                    <span>₹3</span>
+                    <span>₹{platformFee.toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-sm font-bold text-gray-600">
+                    <span>Rounding Adjustment</span>
+                    <span className={roundingAdjustment > 0 ? "text-gray-600" : "text-emerald-600"}>
+                      {roundingAdjustment > 0 ? '+' : ''}{roundingAdjustment.toFixed(2)}
+                    </span>
                   </div>
 
                   <div className="pt-6 mt-4 border-t-2 border-dashed border-gray-200">
                     <div className="flex justify-between items-center">
-                      <span className="text-xl font-black text-gray-900">Total Amount</span>
-                      <span className="text-2xl font-black text-gray-900">₹{(total + 3).toFixed(0)}</span>
+                      <span className="text-xl font-black text-gray-900">Total Payable</span>
+                      <span className="text-2xl font-black text-gray-900">₹{finalPayable.toFixed(2)}</span>
                     </div>
                   </div>
 
                   <div className="mt-4 bg-emerald-50 text-emerald-700 text-xs font-black uppercase tracking-wider p-4 rounded-2xl text-center border-2 border-emerald-100/50">
-                    You will save ₹{totalDiscount.toFixed(0)} on this order
+                    Total Tax: ₹{(cgstAmount + sgstAmount).toFixed(2)} | Net Savings: ₹{(lineDiscountTotal + couponDiscount).toFixed(2)}
                   </div>
                 </div>
 
@@ -533,7 +611,7 @@ const Cart = () => {
         </div>
       </div>
 
-      {/* Payment Simulation Modal */}
+      {/* Payment Modal */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative animate-in zoom-in duration-300">
@@ -542,34 +620,52 @@ const Cart = () => {
             </button>
             <div className="text-center space-y-6">
               <div className="w-20 h-20 bg-primary-50 text-primary-600 rounded-full flex items-center justify-center mx-auto shadow-inner border border-primary-100">
-                <ShieldCheck className="w-10 h-10" />
+                <Smartphone className="w-10 h-10" />
               </div>
               <div>
-                <h3 className="text-2xl font-black text-gray-900 mb-2">Secure Payment</h3>
-                <p className="text-gray-500 font-medium">
-                  {paymentMethod === 'upi' ? 'Scan QR or use UPI App' : paymentMethod === 'netbanking' ? 'Login to your bank account' : 'Enter your card details'} to securely pay <span className="font-bold text-gray-900">₹{(total+3).toFixed(0)}</span>.
+                <h3 className="text-2xl font-black text-gray-900 mb-2">Pay via UPI</h3>
+                <p className="text-gray-500 font-medium mb-4">
+                  Scan the QR code below to pay <span className="font-bold text-gray-900">₹{finalPayable.toFixed(2)}</span>
                 </p>
+                {shopUpiId ? (
+                  <div className="flex justify-center bg-gray-50 p-4 rounded-2xl border-2 border-dashed border-gray-200 inline-block mx-auto">
+                    <QRCodeSVG value={`upi://pay?pa=${shopUpiId}&pn=Fertilizer%20Shop&am=${finalPayable.toFixed(2)}&cu=INR`} size={200} />
+                  </div>
+                ) : (
+                  <div className="p-4 bg-yellow-50 text-yellow-700 rounded-lg text-sm font-medium">
+                    UPI payments are currently disabled. Please contact the shop owner or use Cash on Delivery.
+                  </div>
+                )}
               </div>
-              <div className="bg-gray-50 rounded-2xl p-6 border-2 border-dashed border-gray-200">
-                <div className="space-y-4">
-                  <div className="h-10 bg-gray-200/60 rounded-lg w-full"></div>
-                  <div className="h-10 bg-gray-200/60 rounded-lg w-full"></div>
+              
+              {shopUpiId && (
+                <div className="space-y-2 text-left mt-4">
+                  <label className="block text-sm font-bold text-gray-700">Enter 12-digit UTR Number *</label>
+                  <input
+                    type="text"
+                    maxLength={12}
+                    value={utrNumber}
+                    onChange={(e) => setUtrNumber(e.target.value.replace(/\D/g, ''))}
+                    placeholder="e.g., 312345678901"
+                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all font-medium placeholder:font-normal"
+                  />
+                  <p className="text-xs text-gray-500">Find this in your payment app (GPay, PhonePe) after paying.</p>
                 </div>
-              </div>
+              )}
+
               <button
                 onClick={() => {
-                  toast.loading('Processing payment...', { id: 'payment' })
-                  setLoading(true)
-                  setTimeout(() => {
-                    toast.success('Payment successful!', { id: 'payment' })
-                    executeOrder()
-                  }, 2000)
+                  if (shopUpiId && utrNumber.length !== 12) {
+                    toast.error('Please enter a valid 12-digit UTR number')
+                    return
+                  }
+                  executeOrder()
                 }}
-                disabled={loading}
+                disabled={loading || (shopUpiId && utrNumber.length !== 12)}
                 className="w-full bg-primary-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-primary-700 transition-all shadow-xl shadow-primary-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading && <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {loading ? 'Processing...' : 'Simulate Payment'}
+                {loading ? 'Processing...' : 'Submit Payment Details'}
               </button>
             </div>
           </div>

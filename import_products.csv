@@ -1,0 +1,4 @@
+name,type,price,quantity,supplier,description
+Test Product A,NPK,150.50,10,AgriCorp,Test product
+Test Product B,Urea,250.00,20,FarmSupplies,Test urea
+Test Product C,Organic,300.00,5,BioTech,Test compost

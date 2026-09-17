@@ -22,10 +22,12 @@ import Cart from '../../pages/store/Cart'
 import OrderHistory from '../../pages/sales/OrderHistory'
 import OrderDetail from '../../pages/sales/OrderDetail'
 import AdminOrders from '../../pages/sales/AdminOrders'
+import AdminSettings from '../../pages/dashboard/AdminSettings'
 import Survey from '../../pages/features/Survey'
 import SmartAssistant from '../../pages/features/SmartAssistant'
 import GovernmentSchemes from '../../pages/features/GovernmentSchemes'
 import { Farmers, AddFarmer, EditFarmer, FarmerDetail } from '../../pages/farmers'
+import Profile from '../../pages/users/Profile'
 
 import { ProtectedRoute } from '../auth'
 
@@ -47,6 +49,7 @@ const MainContent = ({ products, sales, onRefresh }) => {
           {/* Farmer & Admin Routes */}
           <Route path="shop" element={<Shop products={products} />} />
           <Route path="cart" element={<Cart />} />
+          <Route path="profile" element={<Profile />} />
           <Route path="orders" element={<OrderHistory />} />
           <Route path="orders/:id" element={<OrderDetail />} />
           <Route path="survey" element={<Survey />} />
@@ -88,6 +91,11 @@ const MainContent = ({ products, sales, onRefresh }) => {
           <Route path="manage-orders" element={
             <ProtectedRoute allowedRoles={['owner', 'admin']}>
               <AdminOrders />
+            </ProtectedRoute>
+          } />
+          <Route path="settings" element={
+            <ProtectedRoute allowedRoles={['owner', 'admin']}>
+              <AdminSettings />
             </ProtectedRoute>
           } />
           <Route path="customers" element={
