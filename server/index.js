@@ -207,6 +207,10 @@ async function initializeDatabase() {
     await db.execute(`ALTER TABLE farmers ADD COLUMN accrued_interest DECIMAL(12,2) DEFAULT 0`);
   }
 
+  if (!(await columnExists('farmers', 'soil_type'))) {
+    await db.execute(`ALTER TABLE farmers ADD COLUMN soil_type VARCHAR(100) NULL`);
+  }
+
   if (!(await columnExists('sales', 'farmer_id'))) {
     await db.execute(`ALTER TABLE sales ADD COLUMN farmer_id INT NULL`);
   }
@@ -683,15 +687,17 @@ async function seedDemoData() {
   // Requires `products.name` to be UNIQUE (created in schema).
   for (const product of demoProducts) {
     await db.execute(
-      `INSERT INTO products (name, type, price, quantity, supplier, description)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO products (name, type, price, quantity, supplier, description, batch_number, expiry_date, shop_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
        ON DUPLICATE KEY UPDATE
          type = VALUES(type),
          price = VALUES(price),
          quantity = GREATEST(quantity, VALUES(quantity)),
          supplier = VALUES(supplier),
-         description = VALUES(description)`,
-      [product.name, product.type, product.price, product.quantity, product.supplier, product.description]
+         description = VALUES(description),
+         batch_number = COALESCE(batch_number, VALUES(batch_number)),
+         expiry_date = COALESCE(expiry_date, VALUES(expiry_date))`,
+      [product.name, product.type, product.price, product.quantity, product.supplier, product.description, product.batch_number, product.expiry_date]
     );
   }
 
@@ -707,37 +713,7 @@ async function seedDemoData() {
     );
   }
 
-  // Seed demo sales
-  const [[{ count: salesCount }]] = await db.execute('SELECT COUNT(*) as count FROM sales');
-  if (salesCount === 0) {
-    const [[npk]] = await db.execute('SELECT id, price FROM products WHERE name = ? LIMIT 1', ['NPK 20-20-20']);
-    const [[urea]] = await db.execute('SELECT id, price FROM products WHERE name = ? LIMIT 1', ['Urea']);
-
-    const [sale1] = await db.execute(
-      'INSERT INTO sales (customer_name, customer_phone, total_amount, payment_method) VALUES (?, ?, ?, ?)',
-      ['Ravi Kumar', '9876543210', 2400, 'Cash']
-    );
-    if (npk) {
-      await db.execute(
-        'INSERT INTO sale_items (sale_id, product_id, quantity, price_per_unit, total_price) VALUES (?, ?, ?, ?, ?)',
-        [sale1.insertId, npk.id, 2, npk.price, npk.price * 2]
-      );
-      await db.execute('UPDATE products SET quantity = quantity - 2 WHERE id = ?', [npk.id]);
-    }
-
-    const [sale2] = await db.execute(
-      'INSERT INTO sales (customer_name, customer_phone, total_amount) VALUES (?, ?, ?)',
-      ['Sita Devi', '9123456780', 900]
-    );
-    if (urea) {
-      await db.execute(
-        'INSERT INTO sale_items (sale_id, product_id, quantity, price_per_unit, total_price) VALUES (?, ?, ?, ?, ?)',
-        [sale2.insertId, urea.id, 1, urea.price, urea.price]
-      );
-      await db.execute('UPDATE products SET quantity = quantity - 1 WHERE id = ?', [urea.id]);
-    }
-    console.log('Seeded demo sales');
-  }
+  // Demo sales seeding disabled so customer and sales lists remain clean and driven purely by user transactions
 
   // Seed owner and admin users
   const [[ownerRow]] = await db.execute('SELECT id FROM users WHERE email = ?', ['owner@example.com']);
@@ -791,17 +767,7 @@ async function seedDashboardData() {
     }
   }
 
-  const [[{ count: creditCount }]] = await db.execute('SELECT COUNT(*) as count FROM credit_reminders');
-  if (creditCount === 0) {
-    const demoReminders = [
-      ['Ravi Kumar', 5000, '2024-01-15', 'overdue'],
-      ['Sita Devi', 3000, '2024-01-20', 'due'],
-      ['Amit Patel', 1500, '2024-01-25', 'due']
-    ];
-    for (const reminder of demoReminders) {
-      await db.execute('INSERT INTO credit_reminders (customer_name, amount, due_date, status) VALUES (?, ?, ?, ?)', reminder);
-    }
-  }
+  // Automated monthly credit reminders will be generated dynamically from real farmer credit balances
 }
 
 // Seed compatibility data
@@ -1179,21 +1145,31 @@ app.get('/api/accounting/summary', verifyToken, async (req, res) => {
 
 app.get('/api/inventory/expiry', verifyToken, async (req, res) => {
   try {
+    const shopId = req.user.shop_id || 1;
     const [rows] = await db.execute(`
       SELECT id, name as productName, type, description, batch_number as batchNumber, quantity, 
              DATE_FORMAT(expiry_date, '%Y-%m-%d') as expiryDate,
-             DATEDIFF(expiry_date, NOW()) as daysUntilExpiry,
+             COALESCE(DATEDIFF(expiry_date, NOW()), 9999) as daysUntilExpiry,
              supplier, price as cost, (price * quantity) as totalValue,
              CASE 
+               WHEN expiry_date IS NULL THEN 'safe'
                WHEN expiry_date < NOW() THEN 'expired'
                WHEN DATEDIFF(expiry_date, NOW()) <= 7 THEN 'critical'
                WHEN DATEDIFF(expiry_date, NOW()) <= 30 THEN 'warning'
                ELSE 'safe'
              END as status
       FROM products
-      WHERE expiry_date IS NOT NULL AND shop_id = ?
-      ORDER BY expiry_date ASC
-    `, [req.user.shop_id || 1]);
+      WHERE (shop_id = ? OR (shop_id IS NULL AND ? = 1))
+      ORDER BY 
+        CASE 
+          WHEN expiry_date IS NULL THEN 3
+          WHEN expiry_date < NOW() THEN 0
+          WHEN DATEDIFF(expiry_date, NOW()) <= 7 THEN 1
+          WHEN DATEDIFF(expiry_date, NOW()) <= 30 THEN 2
+          ELSE 3
+        END,
+        expiry_date ASC
+    `, [shopId, shopId]);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3051,7 +3027,7 @@ app.get('/api/users/profile', verifyToken, async (req, res) => {
     const query = `
       SELECT 
         u.id, u.username, u.email, u.role, u.shop_id, u.farmer_id,
-        f.phone, f.location, f.farm_size, f.crop_type, 
+        f.phone, f.location, f.farm_size, f.crop_type, f.soil_type,
         f.credit_limit, f.current_credit, f.interest_rate, f.accrued_interest
       FROM users u
       LEFT JOIN farmers f ON u.farmer_id = f.id
@@ -3074,12 +3050,13 @@ app.get('/api/users/profile', verifyToken, async (req, res) => {
 });
 
 app.put('/api/users/profile', verifyToken, async (req, res) => {
-  const { name, phone, email, location, farm_size, crop_type } = req.body;
+  const { name, phone, email, location, farm_size, crop_type, soil_type } = req.body;
   const safePhone = phone && String(phone).trim() !== '' ? String(phone).trim() : null;
   const safeEmail = email && String(email).trim() !== '' ? String(email).trim() : null;
   const safeLocation = location && String(location).trim() !== '' ? String(location).trim() : null;
   const safeFarmSize = farm_size && String(farm_size).trim() !== '' ? String(farm_size).trim() : null;
   const safeCropType = crop_type && String(crop_type).trim() !== '' ? String(crop_type).trim() : null;
+  const safeSoilType = soil_type && String(soil_type).trim() !== '' ? String(soil_type).trim() : null;
   const connection = await db.getConnection();
   
   try {
@@ -3102,12 +3079,12 @@ app.put('/api/users/profile', verifyToken, async (req, res) => {
       }
       
       await connection.execute(
-        'UPDATE farmers SET name = ?, phone = ?, email = ?, location = ?, farm_size = ?, crop_type = ? WHERE id = ?',
-        [name, safePhone, safeEmail, safeLocation, safeFarmSize, safeCropType, user.farmer_id]
+        'UPDATE farmers SET name = ?, phone = ?, email = ?, location = ?, farm_size = ?, crop_type = ?, soil_type = ? WHERE id = ?',
+        [name, safePhone, safeEmail, safeLocation, safeFarmSize, safeCropType, safeSoilType, user.farmer_id]
       );
     } else {
       // 2b. Only create/link if farmer fields are provided to prevent unnecessary CRM records
-      if (safePhone || safeLocation || safeFarmSize || safeCropType) {
+      if (safePhone || safeLocation || safeFarmSize || safeCropType || safeSoilType) {
         let targetFarmerId = null;
         
         const [[farmerByPhone]] = safePhone ? await connection.execute('SELECT id FROM farmers WHERE phone = ? LIMIT 1', [safePhone]) : [[]];
@@ -3134,14 +3111,14 @@ app.put('/api/users/profile', verifyToken, async (req, res) => {
           
           // Update their details
           await connection.execute(
-            'UPDATE farmers SET name = ?, phone = ?, email = ?, location = ?, farm_size = ?, crop_type = ? WHERE id = ?',
-            [name, safePhone, safeEmail, safeLocation, safeFarmSize, safeCropType, targetFarmerId]
+            'UPDATE farmers SET name = ?, phone = ?, email = ?, location = ?, farm_size = ?, crop_type = ?, soil_type = ? WHERE id = ?',
+            [name, safePhone, safeEmail, safeLocation, safeFarmSize, safeCropType, safeSoilType, targetFarmerId]
           );
         } else {
           // Create new farmer
           const [result] = await connection.execute(
-            'INSERT INTO farmers (name, phone, email, location, farm_size, crop_type, shop_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [name, safePhone, safeEmail, safeLocation, safeFarmSize, safeCropType, req.user.shop_id || 1]
+            'INSERT INTO farmers (name, phone, email, location, farm_size, crop_type, soil_type, shop_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [name, safePhone, safeEmail, safeLocation, safeFarmSize, safeCropType, safeSoilType, req.user.shop_id || 1]
           );
           targetFarmerId = result.insertId;
           await connection.execute('UPDATE users SET farmer_id = ? WHERE id = ?', [targetFarmerId, req.user.id]);

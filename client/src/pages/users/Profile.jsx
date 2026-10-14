@@ -16,7 +16,8 @@ const Profile = () => {
     email: '',
     location: '',
     farm_size: '',
-    crop_type: ''
+    crop_type: '',
+    soil_type: ''
   });
 
   useEffect(() => {
@@ -33,7 +34,8 @@ const Profile = () => {
         email: response.data.email || '',
         location: response.data.location || '',
         farm_size: response.data.farm_size || '',
-        crop_type: response.data.crop_type || ''
+        crop_type: response.data.crop_type || '',
+        soil_type: response.data.soil_type || ''
       });
       setError(null);
     } catch (err) {
@@ -77,7 +79,8 @@ const Profile = () => {
         email: profile.email || '',
         location: profile.location || '',
         farm_size: profile.farm_size || '',
-        crop_type: profile.crop_type || ''
+        crop_type: profile.crop_type || '',
+        soil_type: profile.soil_type || ''
       });
     }
   };
@@ -259,6 +262,20 @@ const Profile = () => {
                           />
                         </div>
                       </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Soil Type</label>
+                        <div className="mt-1 relative rounded-md shadow-sm">
+                          <input
+                            type="text"
+                            name="soil_type"
+                            value={formData.soil_type}
+                            onChange={handleChange}
+                            placeholder="e.g. Black Soil, Loamy, Clay"
+                            className="focus:ring-green-500 focus:border-green-500 block w-full px-3 sm:text-sm border-gray-300 rounded-md py-2 border"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -315,6 +332,10 @@ const Profile = () => {
                     <div className="sm:col-span-1">
                       <dt className="text-sm font-medium text-gray-500 flex items-center"><Sprout className="h-4 w-4 mr-2" /> Crop Type</dt>
                       <dd className="mt-1 text-sm text-gray-900">{profile?.crop_type || <span className="text-gray-400 italic">Not added</span>}</dd>
+                    </div>
+                    <div className="sm:col-span-1">
+                      <dt className="text-sm font-medium text-gray-500">Soil Type</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{profile?.soil_type || <span className="text-gray-400 italic">Not added</span>}</dd>
                     </div>
                   </dl>
                 </div>

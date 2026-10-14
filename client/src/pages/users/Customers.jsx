@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Search, Phone, Mail, Calendar, AlertTriangle, CheckCircle, Pencil, Trash2 } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
+import api from '../../utils/api'
 
 const Customers = ({ sales }) => {
   const { t } = useLanguage()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [internalSales, setInternalSales] = useState([])
   const [customerOverrides, setCustomerOverrides] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('customerOverrides')) || {}
@@ -23,6 +25,18 @@ const Customers = ({ sales }) => {
   const [editingCustomer, setEditingCustomer] = useState(null)
 
   useEffect(() => {
+    if (!sales || sales.length === 0) {
+      api.get('/sales')
+        .then(res => {
+          if (Array.isArray(res.data)) {
+            setInternalSales(res.data)
+          }
+        })
+        .catch(() => {})
+    }
+  }, [sales])
+
+  useEffect(() => {
     localStorage.setItem('customerOverrides', JSON.stringify(customerOverrides))
   }, [customerOverrides])
 
@@ -30,34 +44,44 @@ const Customers = ({ sales }) => {
     localStorage.setItem('deletedCustomerIds', JSON.stringify(deletedCustomerIds))
   }, [deletedCustomerIds])
 
-  const salesList = Array.isArray(sales) ? sales : []
+  const salesList = (Array.isArray(sales) && sales.length > 0) ? sales : internalSales
 
-  // Derive unique customers from sales
+  // Derive unique customers strictly from actual recorded sales
   const customerMap = new Map()
-
-  // Add some demo customers initially if no sales
-  const demoCustomers = [
-    { id: 1, name: 'Ravi Kumar', phone: '9876543210', email: 'ravi.kumar@email.com', creditLimit: 10000, currentCredit: 5000, dueDate: '2024-01-15', status: 'overdue', lastPurchase: '2024-01-10' },
-    { id: 2, name: 'Sita Devi', phone: '9123456780', email: 'sita.devi@email.com', creditLimit: 8000, currentCredit: 3000, dueDate: '2024-01-20', status: 'due', lastPurchase: '2024-01-12' },
-    { id: 3, name: 'Amit Patel', phone: '9456781230', email: 'amit.patel@email.com', creditLimit: 15000, currentCredit: 1500, dueDate: '2024-01-25', status: 'due', lastPurchase: '2024-01-14' }
-  ]
-
-  demoCustomers.forEach(c => customerMap.set(c.name, c))
 
   salesList.forEach(sale => {
     if (sale.customer_name) {
-      const existing = customerMap.get(sale.customer_name)
-      customerMap.set(sale.customer_name, {
-        id: existing?.id || sale.id,
-        name: sale.customer_name,
-        phone: sale.customer_phone || existing?.phone || 'No phone',
-        email: existing?.email || 'N/A',
-        creditLimit: existing?.creditLimit || 10000,
-        currentCredit: existing?.currentCredit || 0,
-        dueDate: existing?.dueDate || 'N/A',
-        status: existing?.status || 'good',
-        lastPurchase: sale.sale_date ? new Date(sale.sale_date).toISOString().split('T')[0] : (existing?.lastPurchase || 'N/A')
-      })
+      const key = (sale.customer_phone ? `${sale.customer_name}_${sale.customer_phone}` : sale.customer_name).trim().toLowerCase()
+      const existing = customerMap.get(key)
+      const saleDate = sale.sale_date ? new Date(sale.sale_date).toISOString().split('T')[0] : 'N/A'
+      const isCredit = (sale.payment_method || '').toLowerCase() === 'credit'
+      const saleAmount = parseFloat(sale.total_amount) || 0
+
+      if (existing) {
+        const latestPurchase = existing.lastPurchase === 'N/A' || saleDate > existing.lastPurchase ? saleDate : existing.lastPurchase
+        customerMap.set(key, {
+          ...existing,
+          currentCredit: existing.currentCredit + (isCredit ? saleAmount : 0),
+          totalPurchases: existing.totalPurchases + saleAmount,
+          ordersCount: existing.ordersCount + 1,
+          lastPurchase: latestPurchase,
+          status: (existing.currentCredit + (isCredit ? saleAmount : 0)) > 0 ? 'due' : existing.status
+        })
+      } else {
+        customerMap.set(key, {
+          id: sale.id,
+          name: sale.customer_name,
+          phone: sale.customer_phone || 'No phone',
+          email: sale.customer_email || 'N/A',
+          creditLimit: 10000,
+          currentCredit: isCredit ? saleAmount : 0,
+          dueDate: isCredit ? (sale.due_date || 'Within 30 days') : 'N/A',
+          status: isCredit ? 'due' : 'good',
+          lastPurchase: saleDate,
+          totalPurchases: saleAmount,
+          ordersCount: 1
+        })
+      }
     }
   })
 
