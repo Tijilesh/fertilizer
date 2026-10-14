@@ -347,6 +347,48 @@ async function initializeDatabase() {
     FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL
   )`);
 
+  await db.execute(`CREATE TABLE IF NOT EXISTS cash_drawer_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    shop_id INT DEFAULT 1,
+    session_code VARCHAR(50) NOT NULL UNIQUE,
+    session_date DATE NOT NULL,
+    opened_by INT NULL,
+    opened_by_name VARCHAR(255) DEFAULT 'Shop Manager',
+    opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    opening_cash DECIMAL(10,2) NOT NULL DEFAULT 0,
+    closed_by INT NULL,
+    closed_by_name VARCHAR(255) NULL,
+    closed_at DATETIME NULL,
+    status VARCHAR(20) DEFAULT 'OPEN',
+    expected_cash DECIMAL(10,2) DEFAULT 0,
+    actual_cash DECIMAL(10,2) DEFAULT 0,
+    difference DECIMAL(10,2) DEFAULT 0,
+    cash_sales_amount DECIMAL(10,2) DEFAULT 0,
+    online_sales_amount DECIMAL(10,2) DEFAULT 0,
+    credit_sales_amount DECIMAL(10,2) DEFAULT 0,
+    total_sales_amount DECIMAL(10,2) DEFAULT 0,
+    cash_in_manual DECIMAL(10,2) DEFAULT 0,
+    cash_out_expenses DECIMAL(10,2) DEFAULT 0,
+    denominations TEXT NULL,
+    handover_to VARCHAR(255) NULL,
+    closing_notes TEXT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  )`);
+
+  await db.execute(`CREATE TABLE IF NOT EXISTS cash_drawer_transactions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT NOT NULL,
+    shop_id INT DEFAULT 1,
+    type VARCHAR(50) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    category VARCHAR(100) DEFAULT 'Miscellaneous',
+    description TEXT NULL,
+    created_by_name VARCHAR(255) DEFAULT 'Staff',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES cash_drawer_sessions(id) ON DELETE CASCADE
+  )`);
+
   await db.execute(`CREATE TABLE IF NOT EXISTS farmer_interest_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     farmer_id INT NOT NULL,
@@ -478,7 +520,7 @@ async function initializeDatabase() {
     'farmers', 'products', 'sales', 'users', 'orders', 
     'suppliers', 'purchase_orders', 'payments', 'surveys', 
     'crops', 'farmer_tips', 'seasonal_offers', 'credit_reminders', 'government_schemes',
-    'supplier_returns'
+    'supplier_returns', 'cash_drawer_sessions', 'cash_drawer_transactions'
   ];
   for (const table of tenantTables) {
     if (!(await columnExists(table, 'shop_id'))) {
@@ -1805,6 +1847,508 @@ app.delete('/api/supplier-returns/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     connection.release();
+  }
+});
+
+// ==========================================
+// DAILY CASH DRAWER & DAY-END CLOSING SETTLEMENT
+// ==========================================
+
+app.get('/api/cash-drawer/current', verifyToken, async (req, res) => {
+  const userRole = req.user.role;
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+
+  try {
+    // Check for active OPEN session
+    const [openSessions] = await db.execute(
+      'SELECT * FROM cash_drawer_sessions WHERE shop_id = ? AND status = "OPEN" ORDER BY opened_at DESC LIMIT 1',
+      [shopId]
+    );
+
+    // Fetch last closed session if any
+    const [closedSessions] = await db.execute(
+      'SELECT * FROM cash_drawer_sessions WHERE shop_id = ? AND status = "CLOSED" ORDER BY closed_at DESC LIMIT 1',
+      [shopId]
+    );
+    const lastClosedSession = closedSessions.length > 0 ? closedSessions[0] : null;
+
+    if (openSessions.length === 0) {
+      return res.json({
+        isOpen: false,
+        session: null,
+        activeSession: null,
+        liveStats: null,
+        liveSales: {
+          cashSales: 0,
+          onlineSales: 0,
+          creditSales: 0,
+          totalSales: 0,
+          cashSalesCount: 0,
+          onlineSalesCount: 0,
+          creditSalesCount: 0,
+          totalSalesCount: 0
+        },
+        liveCashIn: 0,
+        liveCashOut: 0,
+        expectedCash: 0,
+        transactions: [],
+        lastClosedSession
+      });
+    }
+
+    const session = openSessions[0];
+
+    // Compute live sales since session opened
+    const [salesStats] = await db.execute(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN total_amount ELSE 0 END), 0) as cash_sales,
+        COALESCE(SUM(CASE WHEN LOWER(payment_method) NOT IN ('cash', 'credit') THEN total_amount ELSE 0 END), 0) as online_sales,
+        COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'credit' THEN total_amount ELSE 0 END), 0) as credit_sales,
+        COALESCE(SUM(total_amount), 0) as total_sales,
+        COUNT(CASE WHEN LOWER(payment_method) = 'cash' THEN 1 END) as cash_sales_count,
+        COUNT(*) as total_sales_count
+      FROM sales
+      WHERE shop_id = ? AND sale_date >= ?
+    `, [shopId, session.opened_at]);
+
+    // Compute manual cash in and cash out transactions
+    const [txStats] = await db.execute(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN type = 'CASH_IN' AND category != 'Opening Float' THEN amount ELSE 0 END), 0) as cash_in,
+        COALESCE(SUM(CASE WHEN type = 'CASH_OUT' THEN amount ELSE 0 END), 0) as cash_out
+      FROM cash_drawer_transactions
+      WHERE session_id = ? AND shop_id = ?
+    `, [session.id, shopId]);
+
+    // Fetch all transactions for this session
+    const [transactions] = await db.execute(
+      'SELECT * FROM cash_drawer_transactions WHERE session_id = ? AND shop_id = ? ORDER BY created_at DESC',
+      [session.id, shopId]
+    );
+
+    const openingCash = parseFloat(session.opening_cash) || 0;
+    const cashSales = parseFloat(salesStats[0]?.cash_sales) || 0;
+    const onlineSales = parseFloat(salesStats[0]?.online_sales) || 0;
+    const creditSales = parseFloat(salesStats[0]?.credit_sales) || 0;
+    const totalSales = parseFloat(salesStats[0]?.total_sales) || 0;
+    const cashSalesCount = parseInt(salesStats[0]?.cash_sales_count, 10) || 0;
+    const totalSalesCount = parseInt(salesStats[0]?.total_sales_count, 10) || 0;
+    const cashIn = parseFloat(txStats[0]?.cash_in) || 0;
+    const cashOut = parseFloat(txStats[0]?.cash_out) || 0;
+    const expectedCash = parseFloat((openingCash + cashSales + cashIn - cashOut).toFixed(2));
+
+    const liveStats = {
+      openingCash,
+      cashSales,
+      onlineSales,
+      creditSales,
+      totalSales,
+      cashSalesCount,
+      totalSalesCount,
+      cashIn,
+      cashOut,
+      expectedCash
+    };
+
+    const liveSales = {
+      cashSales,
+      onlineSales,
+      creditSales,
+      totalSales,
+      cashSalesCount,
+      onlineSalesCount: Math.max(0, totalSalesCount - cashSalesCount),
+      creditSalesCount: 0,
+      totalSalesCount
+    };
+
+    res.json({
+      isOpen: true,
+      session,
+      activeSession: session,
+      liveStats,
+      liveSales,
+      liveCashIn: cashIn,
+      liveCashOut: cashOut,
+      expectedCash,
+      transactions,
+      lastClosedSession
+    });
+  } catch (err) {
+    console.error('Error fetching cash drawer status:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cash-drawer/open', verifyToken, async (req, res) => {
+  const userRole = req.user.role;
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+  const { opening_cash, notes } = req.body;
+
+  const openingFloat = parseFloat(opening_cash);
+  if (isNaN(openingFloat) || openingFloat < 0) {
+    return res.status(400).json({ error: 'Valid opening cash float (>= 0) is required' });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [existing] = await connection.execute(
+      'SELECT id, session_code FROM cash_drawer_sessions WHERE shop_id = ? AND status = "OPEN" LIMIT 1',
+      [shopId]
+    );
+    if (existing.length > 0) {
+      await connection.rollback();
+      return res.status(400).json({ error: `Drawer is already OPEN (Session: ${existing[0].session_code}). Please close it first.` });
+    }
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    const [countRows] = await connection.execute('SELECT COUNT(*) as cnt FROM cash_drawer_sessions WHERE shop_id = ?', [shopId]);
+    const seq = (countRows[0]?.cnt || 0) + 1;
+    const sessionCode = `CDS-${dateStr.replace(/-/g, '')}-${String(seq).padStart(4, '0')}`;
+
+    const [insertResult] = await connection.execute(`
+      INSERT INTO cash_drawer_sessions (
+        shop_id, session_code, session_date, opened_by, opened_by_name, opening_cash,
+        status, expected_cash, closing_notes
+      ) VALUES (?, ?, ?, ?, ?, ?, 'OPEN', ?, ?)
+    `, [
+      shopId,
+      sessionCode,
+      dateStr,
+      req.user.id || null,
+      req.user.username || 'Shop Manager',
+      openingFloat,
+      openingFloat,
+      notes || null
+    ]);
+
+    const sessionId = insertResult.insertId;
+
+    // Log opening float transaction
+    await connection.execute(`
+      INSERT INTO cash_drawer_transactions (
+        session_id, shop_id, type, amount, category, description, created_by_name
+      ) VALUES (?, ?, 'CASH_IN', ?, 'Opening Float', 'Starting morning cash float in drawer', ?)
+    `, [
+      sessionId,
+      shopId,
+      openingFloat,
+      req.user.username || 'Shop Manager'
+    ]);
+
+    await connection.commit();
+
+    res.status(201).json({
+      success: true,
+      message: `Cash Drawer session ${sessionCode} opened with ₹${openingFloat.toLocaleString()} float.`,
+      sessionId,
+      session_id: sessionId,
+      sessionCode,
+      session_code: sessionCode
+    });
+  } catch (err) {
+    await connection.rollback();
+    console.error('Error opening cash drawer:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
+  }
+});
+
+app.post('/api/cash-drawer/expense', verifyToken, async (req, res) => {
+  const userRole = req.user.role;
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+  const { amount, category, description } = req.body;
+
+  const expenseAmt = parseFloat(amount);
+  if (isNaN(expenseAmt) || expenseAmt <= 0) {
+    return res.status(400).json({ error: 'Valid expense amount (> 0) is required' });
+  }
+
+  try {
+    const [sessions] = await db.execute(
+      'SELECT id FROM cash_drawer_sessions WHERE shop_id = ? AND status = "OPEN" LIMIT 1',
+      [shopId]
+    );
+    if (sessions.length === 0) {
+      return res.status(400).json({ error: 'No active cash drawer session is open. Please open drawer first.' });
+    }
+
+    const sessionId = sessions[0].id;
+    await db.execute(`
+      INSERT INTO cash_drawer_transactions (
+        session_id, shop_id, type, amount, category, description, created_by_name
+      ) VALUES (?, ?, 'CASH_OUT', ?, ?, ?, ?)
+    `, [
+      sessionId,
+      shopId,
+      expenseAmt,
+      category || 'labor',
+      description || null,
+      req.user.username || 'Staff'
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: `Cash expense of ₹${expenseAmt.toFixed(2)} recorded successfully.`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cash-drawer/cash-in', verifyToken, async (req, res) => {
+  const userRole = req.user.role;
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+  const { amount, category, description } = req.body;
+
+  const inAmt = parseFloat(amount);
+  if (isNaN(inAmt) || inAmt <= 0) {
+    return res.status(400).json({ error: 'Valid cash addition amount (> 0) is required' });
+  }
+
+  try {
+    const [sessions] = await db.execute(
+      'SELECT id FROM cash_drawer_sessions WHERE shop_id = ? AND status = "OPEN" LIMIT 1',
+      [shopId]
+    );
+    if (sessions.length === 0) {
+      return res.status(400).json({ error: 'No active cash drawer session is open. Please open drawer first.' });
+    }
+
+    const sessionId = sessions[0].id;
+    await db.execute(`
+      INSERT INTO cash_drawer_transactions (
+        session_id, shop_id, type, amount, category, description, created_by_name
+      ) VALUES (?, ?, 'CASH_IN', ?, ?, ?, ?)
+    `, [
+      sessionId,
+      shopId,
+      inAmt,
+      category || 'change_float',
+      description || null,
+      req.user.username || 'Staff'
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: `Cash addition of ₹${inAmt.toFixed(2)} recorded into drawer.`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cash-drawer/close', verifyToken, async (req, res) => {
+  const userRole = req.user.role;
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+  const { actual_cash, denominations, handover_to, closing_notes } = req.body;
+
+  const countedCash = parseFloat(actual_cash);
+  if (isNaN(countedCash) || countedCash < 0) {
+    return res.status(400).json({ error: 'Valid actual counted cash (>= 0) is required' });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [openSessions] = await connection.execute(
+      'SELECT * FROM cash_drawer_sessions WHERE shop_id = ? AND status = "OPEN" LIMIT 1 FOR UPDATE',
+      [shopId]
+    );
+    if (openSessions.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'No open drawer session found to close' });
+    }
+
+    const session = openSessions[0];
+
+    // Compute sales totals
+    const [salesStats] = await connection.execute(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN total_amount ELSE 0 END), 0) as cash_sales,
+        COALESCE(SUM(CASE WHEN LOWER(payment_method) NOT IN ('cash', 'credit') THEN total_amount ELSE 0 END), 0) as online_sales,
+        COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'credit' THEN total_amount ELSE 0 END), 0) as credit_sales,
+        COALESCE(SUM(total_amount), 0) as total_sales
+      FROM sales
+      WHERE shop_id = ? AND sale_date >= ?
+    `, [shopId, session.opened_at]);
+
+    // Compute cash in/out
+    const [txStats] = await connection.execute(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN type = 'CASH_IN' AND category != 'Opening Float' THEN amount ELSE 0 END), 0) as cash_in,
+        COALESCE(SUM(CASE WHEN type = 'CASH_OUT' THEN amount ELSE 0 END), 0) as cash_out
+      FROM cash_drawer_transactions
+      WHERE session_id = ? AND shop_id = ?
+    `, [session.id, shopId]);
+
+    const openingCash = parseFloat(session.opening_cash) || 0;
+    const cashSales = parseFloat(salesStats[0]?.cash_sales) || 0;
+    const onlineSales = parseFloat(salesStats[0]?.online_sales) || 0;
+    const creditSales = parseFloat(salesStats[0]?.credit_sales) || 0;
+    const totalSales = parseFloat(salesStats[0]?.total_sales) || 0;
+    const cashIn = parseFloat(txStats[0]?.cash_in) || 0;
+    const cashOut = parseFloat(txStats[0]?.cash_out) || 0;
+    const expectedCash = parseFloat((openingCash + cashSales + cashIn - cashOut).toFixed(2));
+    const difference = parseFloat((countedCash - expectedCash).toFixed(2));
+
+    const denomJson = typeof denominations === 'object' ? JSON.stringify(denominations) : (denominations || null);
+
+    await connection.execute(`
+      UPDATE cash_drawer_sessions
+      SET 
+        closed_by = ?,
+        closed_by_name = ?,
+        closed_at = NOW(),
+        status = 'CLOSED',
+        expected_cash = ?,
+        actual_cash = ?,
+        difference = ?,
+        cash_sales_amount = ?,
+        online_sales_amount = ?,
+        credit_sales_amount = ?,
+        total_sales_amount = ?,
+        cash_in_manual = ?,
+        cash_out_expenses = ?,
+        denominations = ?,
+        handover_to = ?,
+        closing_notes = ?
+      WHERE id = ? AND shop_id = ?
+    `, [
+      req.user.id || null,
+      req.user.username || 'Shop Manager',
+      expectedCash,
+      countedCash,
+      difference,
+      cashSales,
+      onlineSales,
+      creditSales,
+      totalSales,
+      cashIn,
+      cashOut,
+      denomJson,
+      handover_to || 'Store Owner',
+      closing_notes || null,
+      session.id,
+      shopId
+    ]);
+
+    await connection.commit();
+
+    const settlement = {
+      sessionId: session.id,
+      session_id: session.id,
+      sessionCode: session.session_code,
+      session_code: session.session_code,
+      status: 'CLOSED',
+      openingCash,
+      cashSales,
+      onlineSales,
+      creditSales,
+      totalSales,
+      cashIn,
+      cashOut,
+      expected_cash: expectedCash,
+      actual_cash: countedCash,
+      difference,
+      handoverTo: handover_to
+    };
+
+    res.json({
+      success: true,
+      message: `Drawer session ${session.session_code} closed. Discrepancy: ${difference >= 0 ? `+₹${difference}` : `-₹${Math.abs(difference)}`}.`,
+      settlement,
+      summary: settlement
+    });
+  } catch (err) {
+    await connection.rollback();
+    console.error('Error closing cash drawer:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
+  }
+});
+
+app.get('/api/cash-drawer/history', verifyToken, async (req, res) => {
+  const userRole = req.user.role;
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+  const numLimit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 30));
+
+  try {
+    const [rows] = await db.query(
+      `SELECT * FROM cash_drawer_sessions WHERE shop_id = ? ORDER BY id DESC LIMIT ${numLimit}`,
+      [shopId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/cash-drawer/session/:id', verifyToken, async (req, res) => {
+  const userRole = req.user.role;
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+  const { id } = req.params;
+
+  try {
+    const [sessions] = await db.execute(
+      'SELECT * FROM cash_drawer_sessions WHERE id = ? AND shop_id = ?',
+      [id, shopId]
+    );
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const [transactions] = await db.execute(
+      'SELECT * FROM cash_drawer_transactions WHERE session_id = ? AND shop_id = ? ORDER BY created_at ASC',
+      [id, shopId]
+    );
+
+    const [settingsRows] = await db.execute(
+      'SELECT setting_key, setting_value FROM shop_settings WHERE shop_id = ?',
+      [shopId]
+    );
+    const shopSettings = {};
+    settingsRows.forEach(r => { shopSettings[r.setting_key] = r.setting_value; });
+
+    res.json({
+      session: sessions[0],
+      transactions,
+      shopSettings
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

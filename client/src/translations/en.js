@@ -11,6 +11,7 @@ export default {
   "payments": "Payments",
   "accounting": "Accounting",
   "stock-alerts": "Stock Alerts",
+  "cashDrawer": "Cash Drawer & Closing",
   "mobile-app": "Mobile App",
   "analytics": "Analytics",
   "reports": "Reports",

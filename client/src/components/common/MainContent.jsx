@@ -19,6 +19,7 @@ import EditProduct from '../../pages/inventory/EditProduct'
 import SaleDetail from '../../pages/sales/SaleDetail'
 import Shop from '../../pages/store/Shop'
 import Cart from '../../pages/store/Cart'
+import CashDrawer from '../../pages/store/CashDrawer'
 import OrderHistory from '../../pages/sales/OrderHistory'
 import OrderDetail from '../../pages/sales/OrderDetail'
 import AdminOrders from '../../pages/sales/AdminOrders'
@@ -117,6 +118,11 @@ const MainContent = ({ products, sales, onRefresh }) => {
           <Route path="payments" element={
             <ProtectedRoute allowedRoles={['owner', 'admin']}>
               <Payments />
+            </ProtectedRoute>
+          } />
+          <Route path="cash-drawer" element={
+            <ProtectedRoute allowedRoles={['owner', 'admin']}>
+              <CashDrawer />
             </ProtectedRoute>
           } />
           <Route path="accounting" element={

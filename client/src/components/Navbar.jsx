@@ -23,6 +23,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
       // 2. Admin Core Business (POS & Online Orders)
       { path: '/sales', label: t('sales'), icon: TrendingUp, roles: ['owner', 'admin'], color: 'text-emerald-600' },
       { path: '/manage-orders', label: t('manageOrders') || 'Online Orders', icon: ShoppingBag, roles: ['owner', 'admin'], color: 'text-teal-600' },
+      { path: '/cash-drawer', label: t('cashDrawer') || 'Cash Drawer & Closing', icon: Calculator, roles: ['owner', 'admin'], color: 'text-amber-600' },
       
       // 3. User Shop Features
       { path: '/profile', label: t('myProfile') || 'My Profile', icon: User, roles: ['user'], color: 'text-blue-600' },
