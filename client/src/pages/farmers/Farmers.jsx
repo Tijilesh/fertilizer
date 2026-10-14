@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Trash2, Eye, Users, TrendingUp, Phone, MapPin, Edit, MessageSquare } from 'lucide-react'
+import { Plus, Search, Trash2, Eye, Users, TrendingUp, Phone, MapPin, Edit, MessageSquare, AlertCircle } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import { WhatsAppReminderModal } from '../../components/common'
@@ -12,6 +12,7 @@ const Farmers = () => {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [creditFilter, setCreditFilter] = useState('all')
   const hasFetchedRef = useRef(false)
   const [editingFarmer, setEditingFarmer] = useState(null)
   const [reminderFarmer, setReminderFarmer] = useState(null)
@@ -53,8 +54,17 @@ const Farmers = () => {
       farmer.phone.includes(searchTerm) ||
       (farmer.email || '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = filterStatus === 'all' || farmer.status === filterStatus
-    return matchesSearch && matchesStatus
+
+    const totalDue = parseFloat(farmer.current_credit || 0) + parseFloat(farmer.accrued_interest || 0)
+    let matchesCredit = true
+    if (creditFilter === 'with_credit') matchesCredit = totalDue > 0
+    else if (creditFilter === 'no_credit') matchesCredit = totalDue <= 0
+
+    return matchesSearch && matchesStatus && matchesCredit
   })
+
+  const totalOutstandingCredit = farmers.reduce((sum, f) => sum + (parseFloat(f.current_credit || 0) + parseFloat(f.accrued_interest || 0)), 0)
+  const farmersWithDueCount = farmers.filter(f => (parseFloat(f.current_credit || 0) + parseFloat(f.accrued_interest || 0)) > 0).length
 
   if (loading) {
     return (
@@ -87,7 +97,7 @@ const Farmers = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="glass-card premium-shadow p-6 rounded-2xl border">
           <div className="flex items-center justify-between">
             <div>
@@ -121,6 +131,22 @@ const Farmers = () => {
             </div>
           </div>
         </div>
+        <div className="glass-card premium-shadow p-6 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/50 to-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-amber-700 font-semibold">{t('outstandingCredit') || 'Outstanding Credit'}</p>
+              <p className="text-3xl font-bold text-amber-600">
+                ₹{totalOutstandingCredit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-xs text-amber-600/90 mt-1 font-medium">
+                {farmersWithDueCount} {farmersWithDueCount === 1 ? 'farmer has' : 'farmers have'} balance
+              </p>
+            </div>
+            <div className="p-3 bg-amber-100 text-amber-600 rounded-full">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -135,15 +161,25 @@ const Farmers = () => {
             className="w-full pl-12 pr-4 py-3 bg-white/50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all outline-none"
           />
         </div>
-        <div>
+        <div className="flex flex-wrap items-center gap-3">
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            className="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm bg-white"
           >
             <option value="all">{t('allStatus') || 'All Status'}</option>
             <option value="active">{t('active') || 'Active'}</option>
             <option value="inactive">{t('inactive') || 'Inactive'}</option>
+          </select>
+
+          <select
+            value={creditFilter}
+            onChange={(e) => setCreditFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm bg-white font-medium"
+          >
+            <option value="all">All Farmers (Ledger)</option>
+            <option value="with_credit">⚠️ Outstanding Credit Due Only</option>
+            <option value="no_credit">✅ Zero Balance / Clear Dues</option>
           </select>
         </div>
       </div>

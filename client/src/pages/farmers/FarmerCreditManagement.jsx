@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, Calendar, FileText, AlertTriangle, MessageSquare } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, FileText, AlertTriangle, MessageSquare, Download, Printer } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { WhatsAppReminderModal } from '../../components/common';
@@ -91,6 +92,41 @@ const FarmerCreditManagement = ({ farmer, onUpdate }) => {
     }
   };
 
+  const handleExportStatement = (format = 'xlsx') => {
+    if (!history || history.length === 0) {
+      toast.error('No transactions available in history to export');
+      return;
+    }
+
+    const exportData = history.map((tx, idx) => ({
+      'S.No': idx + 1,
+      'Date': new Date(tx.transaction_date).toLocaleDateString('en-IN'),
+      'Transaction Type': tx.transaction_type.replace('_', ' '),
+      'Total Amount (₹)': parseFloat(tx.amount || 0).toFixed(2),
+      'Principal Component (₹)': parseFloat(tx.principal_amount || 0).toFixed(2),
+      'Interest Component (₹)': parseFloat(tx.interest_amount || 0).toFixed(2),
+      'Reference / Notes': tx.reason || tx.reference_id || '-',
+      'Handled By': tx.performed_by_name || 'System'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Khata_Ledger');
+    const cleanName = (farmer?.name || 'Farmer').replace(/[^a-zA-Z0-9]/g, '_');
+    const fileName = `Khata_Statement_${cleanName}_${new Date().toISOString().slice(0, 10)}.${format}`;
+
+    if (format === 'csv') {
+      XLSX.writeFile(wb, fileName, { bookType: 'csv' });
+    } else {
+      XLSX.writeFile(wb, fileName, { bookType: 'xlsx' });
+    }
+    toast.success(`Exported ${format.toUpperCase()} statement successfully`);
+  };
+
+  const handlePrintStatement = () => {
+    window.print();
+  };
+
   const availableCredit = parseFloat(farmer.credit_limit) - parseFloat(farmer.current_credit);
   const totalPayable = parseFloat(farmer.current_credit) + parseFloat(farmer.accrued_interest);
 
@@ -157,7 +193,37 @@ const FarmerCreditManagement = ({ farmer, onUpdate }) => {
 
       {showHistory && (
         <div className="mt-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Credit & Interest History</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Credit & Interest History</h3>
+              <p className="text-xs text-gray-500">Official khata ledger of credit sales, repayments, waivers, and accrued interest</p>
+            </div>
+            {history.length > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleExportStatement('xlsx')}
+                  className="px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+                  title="Export Statement to Excel"
+                >
+                  <Download className="w-3.5 h-3.5" /> Excel
+                </button>
+                <button
+                  onClick={() => handleExportStatement('csv')}
+                  className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+                  title="Export Statement to CSV"
+                >
+                  <Download className="w-3.5 h-3.5" /> CSV
+                </button>
+                <button
+                  onClick={handlePrintStatement}
+                  className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+                  title="Print Khata Statement"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Print
+                </button>
+              </div>
+            )}
+          </div>
           {loading ? (
              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
           ) : (
