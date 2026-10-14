@@ -458,7 +458,7 @@ const StockExpiry = () => {
                     reason: returnReason,
                     notes: returnNotes
                   })
-                  toast.success(res.data.message || 'Stock returned to supplier successfully!')
+                  toast.success(res.data.message || 'Stock returned to supplier successfully! Debit note generated.', { duration: 5000 })
                   setReturnModalItem(null)
                   fetchExpiryData()
                 } catch (err) {

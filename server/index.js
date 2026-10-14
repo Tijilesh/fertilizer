@@ -324,6 +324,29 @@ async function initializeDatabase() {
     FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders (id)
   )`);
 
+  await db.execute(`CREATE TABLE IF NOT EXISTS supplier_returns (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    shop_id INT DEFAULT 1,
+    debit_note_no VARCHAR(50) NOT NULL UNIQUE,
+    supplier_id INT NULL,
+    supplier_name VARCHAR(255) NOT NULL,
+    product_id INT NULL,
+    product_name VARCHAR(255) NOT NULL,
+    batch_number VARCHAR(100) NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    reason VARCHAR(100) NOT NULL,
+    status VARCHAR(50) DEFAULT 'Approved',
+    settlement_type VARCHAR(50) DEFAULT 'Debit Note / Balance Deduction',
+    notes TEXT,
+    return_date DATE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers (id) ON DELETE SET NULL,
+    FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL
+  )`);
+
   await db.execute(`CREATE TABLE IF NOT EXISTS farmer_interest_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     farmer_id INT NOT NULL,
@@ -454,7 +477,8 @@ async function initializeDatabase() {
   const tenantTables = [
     'farmers', 'products', 'sales', 'users', 'orders', 
     'suppliers', 'purchase_orders', 'payments', 'surveys', 
-    'crops', 'farmer_tips', 'seasonal_offers', 'credit_reminders', 'government_schemes'
+    'crops', 'farmer_tips', 'seasonal_offers', 'credit_reminders', 'government_schemes',
+    'supplier_returns'
   ];
   for (const table of tenantTables) {
     if (!(await columnExists(table, 'shop_id'))) {
@@ -1154,8 +1178,13 @@ app.post('/api/inventory/return-to-supplier', verifyToken, async (req, res) => {
 
     // If supplier exists, optionally adjust current_balance if return value credits back
     const returnValue = (parseFloat(product.price) || 0) * returnQty;
+    let supplierId = null;
     if (product.supplier) {
       try {
+        const [suppRows] = await db.execute('SELECT id FROM suppliers WHERE name = ? AND shop_id = ? LIMIT 1', [product.supplier, shopId]);
+        if (suppRows.length > 0) {
+          supplierId = suppRows[0].id;
+        }
         await db.execute(
           'UPDATE suppliers SET current_balance = GREATEST(0, current_balance - ?) WHERE name = ? AND shop_id = ?',
           [returnValue, product.supplier, shopId]
@@ -1165,12 +1194,50 @@ app.post('/api/inventory/return-to-supplier', verifyToken, async (req, res) => {
       }
     }
 
+    // Generate formal Debit Note and record in supplier_returns
+    const year = new Date().getFullYear();
+    const [maxRows] = await db.execute('SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM supplier_returns');
+    const nextId = maxRows[0]?.next_id || 1;
+    let debitNoteNo = `DN-${year}-${String(nextId).padStart(5, '0')}`;
+    const [existingDn] = await db.execute('SELECT id FROM supplier_returns WHERE debit_note_no = ?', [debitNoteNo]);
+    if (existingDn.length > 0) {
+      debitNoteNo = `DN-${year}-${String(nextId).padStart(4, '0')}-${Date.now().toString().slice(-3)}`;
+    }
+
+    try {
+      await db.execute(`
+        INSERT INTO supplier_returns (
+          shop_id, debit_note_no, supplier_id, supplier_name, product_id, product_name,
+          batch_number, quantity, unit_price, total_amount, reason, status, settlement_type, notes, return_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        shopId,
+        debitNoteNo,
+        supplierId,
+        product.supplier || 'Unassigned Supplier',
+        productId,
+        product.name,
+        product.batch_number || null,
+        returnQty,
+        parseFloat(product.price) || 0,
+        returnValue,
+        reason || 'Defective / Expired Batch Return',
+        'Approved',
+        'Debit Note / Balance Deduction',
+        notes || null,
+        new Date().toISOString().split('T')[0]
+      ]);
+    } catch (insertErr) {
+      console.warn('Could not record into supplier_returns table:', insertErr.message);
+    }
+
     res.json({
       success: true,
-      message: `Successfully returned ${returnQty} units of "${product.name}" to supplier ${product.supplier || 'N/A'}.`,
+      message: `Successfully returned ${returnQty} units of "${product.name}" to supplier ${product.supplier || 'N/A'}. Debit Note: ${debitNoteNo}.`,
       returnedQuantity: returnQty,
       remainingQuantity: product.quantity - returnQty,
-      returnValue
+      returnValue,
+      debitNoteNo
     });
   } catch (err) {
     console.error('Error returning to supplier:', err);
@@ -1419,6 +1486,320 @@ app.delete('/api/purchase-orders/:id', verifyToken, async (req, res) => {
 
     await connection.commit();
     res.json({ message: 'Purchase order deleted successfully' });
+  } catch (err) {
+    await connection.rollback();
+    res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// ==========================================
+// SUPPLIER RETURNS & DEBIT NOTES (DEFECTIVE / EXPIRED BATCH CLAIMS)
+// ==========================================
+
+app.get('/api/supplier-returns', verifyToken, async (req, res) => {
+  const shopId = req.user.shop_id || 1;
+  const { search, supplier_id, status, reason } = req.query;
+
+  try {
+    let query = `
+      SELECT sr.*, s.phone as supplier_phone, s.email as supplier_email, s.current_balance as supplier_balance
+      FROM supplier_returns sr
+      LEFT JOIN suppliers s ON sr.supplier_id = s.id
+      WHERE sr.shop_id = ?
+    `;
+    const params = [shopId];
+
+    if (supplier_id) {
+      query += ` AND sr.supplier_id = ?`;
+      params.push(supplier_id);
+    }
+    if (status) {
+      query += ` AND sr.status = ?`;
+      params.push(status);
+    }
+    if (reason) {
+      query += ` AND sr.reason = ?`;
+      params.push(reason);
+    }
+    if (search) {
+      query += ` AND (sr.debit_note_no LIKE ? OR sr.supplier_name LIKE ? OR sr.product_name LIKE ? OR sr.batch_number LIKE ?)`;
+      const searchPattern = `%${search}%`;
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+    }
+
+    query += ` ORDER BY sr.created_at DESC`;
+    const [returns] = await db.execute(query, params);
+
+    // Compute summary metrics
+    const [summaryRows] = await db.execute(`
+      SELECT 
+        COUNT(*) as total_claims,
+        COALESCE(SUM(total_amount), 0) as total_deducted_amount,
+        COUNT(CASE WHEN status = 'Approved' THEN 1 END) as approved_count,
+        COUNT(CASE WHEN status = 'Pending Approval' THEN 1 END) as pending_count,
+        COUNT(CASE WHEN status = 'Settled / Adjusted' THEN 1 END) as settled_count
+      FROM supplier_returns
+      WHERE shop_id = ?
+    `, [shopId]);
+
+    res.json({
+      returns,
+      summary: summaryRows[0] || {
+        total_claims: 0,
+        total_deducted_amount: 0,
+        approved_count: 0,
+        pending_count: 0,
+        settled_count: 0
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching supplier returns:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/supplier-returns/:id', verifyToken, async (req, res) => {
+  const shopId = req.user.shop_id || 1;
+  const { id } = req.params;
+
+  try {
+    const [rows] = await db.execute(`
+      SELECT sr.*, s.contact_person, s.phone as supplier_phone, s.email as supplier_email, 
+             s.address as supplier_address, s.current_balance as supplier_balance
+      FROM supplier_returns sr
+      LEFT JOIN suppliers s ON sr.supplier_id = s.id
+      WHERE sr.id = ? AND sr.shop_id = ?
+    `, [id, shopId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Supplier return / debit note not found' });
+    }
+
+    // Fetch shop settings for debit note memo print
+    const [shopSettingsRows] = await db.execute('SELECT setting_key, setting_value FROM shop_settings WHERE shop_id = ?', [shopId]);
+    const settings = {};
+    shopSettingsRows.forEach(r => { settings[r.setting_key] = r.setting_value; });
+
+    res.json({
+      returnItem: rows[0],
+      shopSettings: settings
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/supplier-returns', verifyToken, async (req, res) => {
+  const shopId = req.user.shop_id || 1;
+  const {
+    supplier_id,
+    supplier_name,
+    product_id,
+    quantity,
+    unit_price,
+    reason,
+    settlement_type = 'Debit Note / Balance Deduction',
+    status = 'Approved',
+    notes,
+    return_date
+  } = req.body;
+
+  const returnQty = parseInt(quantity, 10);
+  if (!product_id || isNaN(returnQty) || returnQty <= 0) {
+    return res.status(400).json({ error: 'Valid product and return quantity (> 0) are required' });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Check product availability
+    const [products] = await connection.execute('SELECT * FROM products WHERE id = ? AND shop_id = ? FOR UPDATE', [product_id, shopId]);
+    if (products.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const product = products[0];
+    if (product.quantity < returnQty) {
+      await connection.rollback();
+      return res.status(400).json({ error: `Cannot return ${returnQty} units. Only ${product.quantity} in stock.` });
+    }
+
+    const pricePerUnit = parseFloat(unit_price) || parseFloat(product.price) || 0;
+    const totalAmount = parseFloat((pricePerUnit * returnQty).toFixed(2));
+    const effectiveReturnDate = return_date || new Date().toISOString().split('T')[0];
+
+    // Identify or verify supplier
+    let finalSupplierId = supplier_id ? parseInt(supplier_id, 10) : null;
+    let finalSupplierName = supplier_name || product.supplier || 'Unassigned Supplier';
+
+    if (finalSupplierId) {
+      const [suppRows] = await connection.execute('SELECT id, name FROM suppliers WHERE id = ? AND shop_id = ?', [finalSupplierId, shopId]);
+      if (suppRows.length > 0) {
+        finalSupplierName = suppRows[0].name;
+      }
+    } else if (finalSupplierName && finalSupplierName !== 'Unassigned Supplier') {
+      const [suppRows] = await connection.execute('SELECT id FROM suppliers WHERE name = ? AND shop_id = ? LIMIT 1', [finalSupplierName, shopId]);
+      if (suppRows.length > 0) {
+        finalSupplierId = suppRows[0].id;
+      }
+    }
+
+    // Generate unique debit note number: DN-YYYY-XXXXX
+    const year = new Date().getFullYear();
+    const [maxRows] = await connection.execute('SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM supplier_returns');
+    const nextId = maxRows[0]?.next_id || 1;
+    let debitNoteNo = `DN-${year}-${String(nextId).padStart(5, '0')}`;
+    const [existingDn] = await connection.execute('SELECT id FROM supplier_returns WHERE debit_note_no = ?', [debitNoteNo]);
+    if (existingDn.length > 0) {
+      debitNoteNo = `DN-${year}-${String(nextId).padStart(4, '0')}-${Date.now().toString().slice(-3)}`;
+    }
+
+    // Deduct stock from products
+    await connection.execute('UPDATE products SET quantity = quantity - ? WHERE id = ? AND shop_id = ?', [returnQty, product_id, shopId]);
+
+    // If status is Approved and settlement is Debit Note, deduct from supplier balance
+    if (status === 'Approved' && settlement_type === 'Debit Note / Balance Deduction' && finalSupplierId) {
+      await connection.execute(
+        'UPDATE suppliers SET current_balance = GREATEST(0, current_balance - ?) WHERE id = ? AND shop_id = ?',
+        [totalAmount, finalSupplierId, shopId]
+      );
+    }
+
+    // Insert record into supplier_returns
+    const [insertResult] = await connection.execute(`
+      INSERT INTO supplier_returns (
+        shop_id, debit_note_no, supplier_id, supplier_name, product_id, product_name,
+        batch_number, quantity, unit_price, total_amount, reason, status, settlement_type, notes, return_date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      shopId,
+      debitNoteNo,
+      finalSupplierId,
+      finalSupplierName,
+      product_id,
+      product.name,
+      product.batch_number || null,
+      returnQty,
+      pricePerUnit,
+      totalAmount,
+      reason || 'Defective Batch',
+      status,
+      settlement_type,
+      notes || null,
+      effectiveReturnDate
+    ]);
+
+    await connection.commit();
+
+    res.status(201).json({
+      success: true,
+      id: insertResult.insertId,
+      debitNoteNo,
+      message: `Debit Note ${debitNoteNo} generated. Successfully returned ${returnQty} units of "${product.name}" to supplier ${finalSupplierName}.`,
+      totalAmount,
+      remainingStock: product.quantity - returnQty
+    });
+  } catch (err) {
+    await connection.rollback();
+    console.error('Error creating supplier return:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
+  }
+});
+
+app.put('/api/supplier-returns/:id/status', verifyToken, async (req, res) => {
+  const shopId = req.user.shop_id || 1;
+  const { id } = req.params;
+  const { status, notes } = req.body;
+
+  const validStatuses = ['Pending Approval', 'Approved', 'Settled / Adjusted', 'Rejected'];
+  if (!status || !validStatuses.includes(status)) {
+    return res.status(400).json({ error: `Status must be one of: ${validStatuses.join(', ')}` });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.execute('SELECT * FROM supplier_returns WHERE id = ? AND shop_id = ? FOR UPDATE', [id, shopId]);
+    if (rows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Supplier return not found' });
+    }
+
+    const currentReturn = rows[0];
+    const prevStatus = currentReturn.status;
+
+    // If changing from non-approved to Approved and Debit Note settlement, apply balance deduction
+    if (prevStatus !== 'Approved' && status === 'Approved' && currentReturn.settlement_type === 'Debit Note / Balance Deduction' && currentReturn.supplier_id) {
+      await connection.execute(
+        'UPDATE suppliers SET current_balance = GREATEST(0, current_balance - ?) WHERE id = ? AND shop_id = ?',
+        [currentReturn.total_amount, currentReturn.supplier_id, shopId]
+      );
+    }
+
+    // If changing from Approved to Rejected, restore supplier balance
+    if (prevStatus === 'Approved' && status === 'Rejected' && currentReturn.settlement_type === 'Debit Note / Balance Deduction' && currentReturn.supplier_id) {
+      await connection.execute(
+        'UPDATE suppliers SET current_balance = current_balance + ? WHERE id = ? AND shop_id = ?',
+        [currentReturn.total_amount, currentReturn.supplier_id, shopId]
+      );
+    }
+
+    await connection.execute(
+      'UPDATE supplier_returns SET status = ?, notes = COALESCE(?, notes), updated_at = NOW() WHERE id = ? AND shop_id = ?',
+      [status, notes || null, id, shopId]
+    );
+
+    await connection.commit();
+    res.json({ success: true, message: `Return status updated to "${status}" successfully.` });
+  } catch (err) {
+    await connection.rollback();
+    res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
+  }
+});
+
+app.delete('/api/supplier-returns/:id', verifyToken, async (req, res) => {
+  const shopId = req.user.shop_id || 1;
+  const { id } = req.params;
+  const restoreStock = req.query.restore === 'true';
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.execute('SELECT * FROM supplier_returns WHERE id = ? AND shop_id = ?', [id, shopId]);
+    if (rows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Supplier return not found' });
+    }
+
+    const ret = rows[0];
+
+    // If restoring stock
+    if (restoreStock && ret.product_id) {
+      await connection.execute('UPDATE products SET quantity = quantity + ? WHERE id = ? AND shop_id = ?', [ret.quantity, ret.product_id, shopId]);
+    }
+
+    // If return was approved and balance was deducted, restore supplier balance
+    if (ret.status === 'Approved' && ret.settlement_type === 'Debit Note / Balance Deduction' && ret.supplier_id) {
+      await connection.execute(
+        'UPDATE suppliers SET current_balance = current_balance + ? WHERE id = ? AND shop_id = ?',
+        [ret.total_amount, ret.supplier_id, shopId]
+      );
+    }
+
+    await connection.execute('DELETE FROM supplier_returns WHERE id = ? AND shop_id = ?', [id, shopId]);
+
+    await connection.commit();
+    res.json({ success: true, message: `Supplier return ${ret.debit_note_no} deleted successfully.` });
   } catch (err) {
     await connection.rollback();
     res.status(500).json({ error: err.message });
