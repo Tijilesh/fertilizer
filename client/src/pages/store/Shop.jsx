@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ShoppingCart,
@@ -11,7 +11,8 @@ import {
   Star,
   Eye,
   Award,
-  Sparkles
+  Sparkles,
+  ArrowUpDown
 } from 'lucide-react'
 import { useCart } from '../../contexts/CartContext'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -28,6 +29,7 @@ const Shop = ({ products }) => {
 
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState('all')
+  const [sortBy, setSortBy] = useState('featured')
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -37,17 +39,33 @@ const Shop = ({ products }) => {
   const productList = Array.isArray(products) ? products : []
   const productTypes = ['all', ...new Set(productList.map(p => p.type).filter(Boolean))]
 
-  const filteredProducts = productList.filter(product => {
-    // Only show in-stock products
-    if (!product.quantity || product.quantity <= 0) return false;
-    
-    const name = product.name || ''
-    const type = product.type || ''
-    const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      type.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesFilter = filterType === 'all' || type === filterType
-    return matchesSearch && matchesFilter
-  })
+  const filteredProducts = useMemo(() => {
+    return productList
+      .filter(product => {
+        // Only show in-stock products
+        if (!product.quantity || product.quantity <= 0) return false;
+        
+        const name = product.name || ''
+        const type = product.type || ''
+        const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          type.toLowerCase().includes(searchTerm.toLowerCase())
+        const matchesFilter = filterType === 'all' || type === filterType
+        return matchesSearch && matchesFilter
+      })
+      .sort((a, b) => {
+        if (sortBy === 'price-low') {
+          return parseFloat(a.price) - parseFloat(b.price)
+        }
+        if (sortBy === 'price-high') {
+          return parseFloat(b.price) - parseFloat(a.price)
+        }
+        if (sortBy === 'name') {
+          return (a.name || '').localeCompare(b.name || '')
+        }
+        // Default: featured (by stock & id)
+        return b.id - a.id
+      })
+  }, [productList, searchTerm, filterType, sortBy])
 
   const handleAddToCart = (product, e) => {
     e?.stopPropagation()
@@ -120,23 +138,41 @@ const Shop = ({ products }) => {
 
 
 
-          {/* Category Pills */}
-          <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
-            {productTypes.map(type => (
-              <button
-                key={type}
-                onClick={() => setFilterType(type)}
-                className={`px-6 py-3 rounded-2xl font-black text-sm whitespace-nowrap transition-all border-2 ${filterType === type
-                  ? 'bg-primary-600 border-primary-600 text-white shadow-lg shadow-primary-600/30 -translate-y-1'
-                  : 'bg-white border-white text-gray-500 hover:border-primary-100 hover:text-primary-600'
-                  }`}
+          {/* Filter & Sort Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            {/* Category Pills */}
+            <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1">
+              {productTypes.map(type => (
+                <button
+                  key={type}
+                  onClick={() => setFilterType(type)}
+                  className={`px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider whitespace-nowrap transition-all border-2 ${filterType === type
+                    ? 'bg-primary-600 border-primary-600 text-white shadow-lg shadow-primary-600/30 -translate-y-0.5'
+                    : 'bg-white border-white text-gray-600 hover:border-primary-100 hover:text-primary-600 shadow-sm'
+                    }`}
+                >
+                  {type === 'all' ? t('allTypes') : type}
+                </button>
+              ))}
+            </div>
+
+            {/* Sort Select */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-2xl border border-gray-200 shadow-sm self-end sm:self-auto">
+              <ArrowUpDown className="w-4 h-4 text-gray-500" />
+              <label htmlFor="shop-sort" className="text-xs font-bold text-gray-500 uppercase">Sort:</label>
+              <select
+                id="shop-sort"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="bg-transparent text-xs font-bold text-gray-800 outline-none cursor-pointer pr-2"
               >
-                {type === 'all' ? t('allTypes') : type}
-              </button>
-            ))}
+                <option value="featured">Featured</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+                <option value="name">Name: A to Z</option>
+              </select>
+            </div>
           </div>
-
-
 
           {/* Main Product Grid */}
           <div className="space-y-8 pb-12">
