@@ -754,6 +754,13 @@ async function seedDemoData() {
     console.log('Seeded admin user: email=admin@example.com, password=admin123');
   }
 
+  const [[userRow]] = await db.execute('SELECT id FROM users WHERE email = ?', ['user@example.com']);
+  if (!userRow) {
+    const hashedPassword = await bcrypt.hash('user123', 10);
+    await db.execute('INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)', ['user', 'user@example.com', hashedPassword, 'user']);
+    console.log('Seeded demo customer user: email=user@example.com, password=user123');
+  }
+
   await seedCompatibilityData();
   await seedDashboardData();
   await seedGovernmentSchemes();
