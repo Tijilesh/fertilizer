@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { BarChart3, Package, TrendingUp, AlertTriangle } from 'lucide-react'
+import { BarChart3, Package, TrendingUp, AlertTriangle, Download, FileSpreadsheet } from 'lucide-react'
 import toast from 'react-hot-toast'
+import * as XLSX from 'xlsx'
 import api from '../../utils/api'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -69,6 +70,47 @@ const Reports = () => {
       case 'Good Stock': return 'text-green-600 bg-green-100'
       default: return 'text-gray-600 bg-gray-100'
     }
+  }
+
+  const exportSalesReport = (format = 'xlsx') => {
+    if (!salesReport || salesReport.length === 0) {
+      toast.error('No sales data to export')
+      return
+    }
+
+    const data = salesReport.map(s => ({
+      Date: new Date(s.date).toLocaleDateString(),
+      'Total Transactions': s.total_sales,
+      'Revenue (INR)': parseFloat(s.total_revenue || 0).toFixed(2)
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Sales Report')
+    XLSX.writeFile(wb, `Sales_Report_${new Date().toISOString().split('T')[0]}.${format}`)
+    toast.success(`Sales report exported as .${format}`)
+  }
+
+  const exportInventoryReport = (format = 'xlsx') => {
+    if (!inventoryReport || inventoryReport.length === 0) {
+      toast.error('No inventory data to export')
+      return
+    }
+
+    const data = inventoryReport.map(item => ({
+      'Product Name': item.name,
+      Category: item.type,
+      'Price (INR)': parseFloat(item.price || 0).toFixed(2),
+      'Quantity in Stock': item.quantity,
+      'Stock Status': item.stock_status,
+      Supplier: item.supplier || 'N/A'
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventory Report')
+    XLSX.writeFile(wb, `Inventory_Report_${new Date().toISOString().split('T')[0]}.${format}`)
+    toast.success(`Inventory report exported as .${format}`)
   }
 
   const totalRevenue = salesReport.reduce((sum, sale) => sum + (parseFloat(sale.total_revenue) || 0), 0)
@@ -149,9 +191,25 @@ const Reports = () => {
             />
             <button
               onClick={fetchSalesReport}
-              className="btn-primary px-6 py-2 rounded-xl shadow-md premium-hover"
+              className="btn-primary px-5 py-2 rounded-xl shadow-md premium-hover text-sm"
             >
               {t('filter')}
+            </button>
+            <button
+              onClick={() => exportSalesReport('xlsx')}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md transition text-sm flex items-center gap-1.5 font-bold"
+              title="Download Excel Spreadsheet"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Excel</span>
+            </button>
+            <button
+              onClick={() => exportSalesReport('csv')}
+              className="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-xl shadow-md transition text-sm flex items-center gap-1.5 font-bold"
+              title="Download CSV"
+            >
+              <Download className="w-4 h-4" />
+              <span>CSV</span>
             </button>
           </div>
         </div>
@@ -196,7 +254,27 @@ const Reports = () => {
 
       {/* Inventory Report */}
       <div className="glass-card premium-shadow p-6 rounded-2xl border">
-        <h2 className="text-xl font-bold text-gray-900 mb-6">{t('inventoryReport')}</h2>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <h2 className="text-xl font-bold text-gray-900">{t('inventoryReport')}</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => exportInventoryReport('xlsx')}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md transition text-sm flex items-center gap-1.5 font-bold"
+              title="Download Inventory Excel Spreadsheet"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Export Excel</span>
+            </button>
+            <button
+              onClick={() => exportInventoryReport('csv')}
+              className="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-xl shadow-md transition text-sm flex items-center gap-1.5 font-bold"
+              title="Download Inventory CSV"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export CSV</span>
+            </button>
+          </div>
+        </div>
 
         {inventoryReport.length > 0 ? (
           <div className="overflow-x-auto">
