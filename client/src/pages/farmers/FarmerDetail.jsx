@@ -263,6 +263,7 @@ const FarmerDetail = () => {
                   <th className="text-left py-3 px-4 font-bold text-gray-700">Amount</th>
                   <th className="text-left py-3 px-4 font-bold text-gray-700">Payment Method</th>
                   <th className="text-left py-3 px-4 font-bold text-gray-700">Status</th>
+                  <th className="text-right py-3 px-4 font-bold text-gray-700">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -288,6 +289,14 @@ const FarmerDetail = () => {
                       }`}>
                         {sale.status}
                       </span>
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <button
+                        onClick={() => navigate(`/sales/${sale.id}`)}
+                        className="inline-flex items-center px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition"
+                      >
+                        Bill / Invoice
+                      </button>
                     </td>
                   </tr>
                 ))}

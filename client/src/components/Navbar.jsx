@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Package, ShoppingCart, BarChart3, Users, User, Building, CreditCard, Calculator, Smartphone, AlertTriangle, TrendingUp, LogOut, ChevronLeft, ChevronRight, History, Tractor, Leaf, Sprout, Wheat, Truck, Receipt, PiggyBank, Calendar, Zap, Bell, ShoppingBag, Settings } from 'lucide-react'
+import { Home, Package, ShoppingCart, BarChart3, Users, User, Building, CreditCard, Calculator, Smartphone, AlertTriangle, TrendingUp, LogOut, ChevronLeft, ChevronRight, History, Tractor, Leaf, Sprout, Wheat, Truck, Receipt, PiggyBank, Calendar, Zap, Bell, ShoppingBag, Settings, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCart } from '../contexts/CartContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -40,6 +40,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
       { path: '/customers', label: t('customers'), icon: Users, roles: ['owner', 'admin'], color: 'text-indigo-600' },
 
       // 6. Tools & Value Add (Global)
+      { path: '/compatibility', label: t('compatibility') || 'Compatibility', icon: ShieldAlert, roles: ['user', 'owner', 'admin'], color: 'text-emerald-600' },
       { path: '/smart-assistant', label: t('smartAssistantNav') || 'Smart Assistant', icon: Zap, roles: ['user', 'owner', 'admin'], color: 'text-purple-600' },
       { path: '/schemes', label: t('govtSchemesNav') || 'Government Schemes', icon: Building, roles: ['user', 'owner', 'admin'], color: 'text-blue-600' },
       { path: '/survey', label: t('survey') || 'Survey', icon: BarChart3, roles: ['user', 'owner', 'admin'], color: 'text-pink-600' },

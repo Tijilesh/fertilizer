@@ -28,6 +28,7 @@ import SmartAssistant from '../../pages/features/SmartAssistant'
 import GovernmentSchemes from '../../pages/features/GovernmentSchemes'
 import { Farmers, AddFarmer, EditFarmer, FarmerDetail } from '../../pages/farmers'
 import Profile from '../../pages/users/Profile'
+import CompatibilityChecker from './CompatibilityChecker'
 
 import { ProtectedRoute } from '../auth'
 
@@ -55,6 +56,11 @@ const MainContent = ({ products, sales, onRefresh }) => {
           <Route path="survey" element={<Survey />} />
           <Route path="smart-assistant" element={<SmartAssistant />} />
           <Route path="schemes" element={<GovernmentSchemes />} />
+          <Route path="compatibility" element={
+            <div className="max-w-5xl mx-auto py-4">
+              <CompatibilityChecker />
+            </div>
+          } />
           <Route path="mobile-app" element={<MobileApp />} />
 
           {/* Admin & Owner Only Routes */}
