@@ -18,7 +18,6 @@ import {
 } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
-import { CompatibilityChecker } from '../../components/common'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -52,7 +51,6 @@ const SmartAssistant = () => {
     location: user?.location || '',
     lastFertilizer: 'NPK 20-20-20'
   })
-  const [activeTab, setActiveTab] = useState('chat')
   const [weatherData, setWeatherData] = useState(null)
   const [dynamicInsights, setDynamicInsights] = useState([])
 
@@ -344,36 +342,7 @@ const SmartAssistant = () => {
         </div>
       </div>
 
-      {/* Tab Switcher */}
-      <div className="flex border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('chat')}
-          className={`px-6 py-3 text-sm font-medium transition-colors relative ${activeTab === 'chat'
-            ? 'text-blue-600'
-            : 'text-gray-500 hover:text-gray-700'
-            }`}
-        >
-          {t('aiFarmAssistant')}
-          {activeTab === 'chat' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('compatibility')}
-          className={`px-6 py-3 text-sm font-medium transition-colors relative ${activeTab === 'compatibility'
-            ? 'text-blue-600'
-            : 'text-gray-500 hover:text-gray-700'
-            }`}
-        >
-          {t('mixingCompatibility')}
-          {activeTab === 'compatibility' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-          )}
-        </button>
-      </div>
-
-      {activeTab === 'chat' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1 min-h-0">
           {/* Left Panel: Profile & Weather */}
           <div className="lg:col-span-1 space-y-4 overflow-y-auto pr-2">
             <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-[2rem] text-white shadow-xl premium-hover relative overflow-hidden group">
@@ -600,12 +569,7 @@ const SmartAssistant = () => {
               </form>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto">
-          <CompatibilityChecker />
-        </div>
-      )}
+      </div>
 
       {/* Configure Farm Profile Modal */}
       {isEditingProfile && (

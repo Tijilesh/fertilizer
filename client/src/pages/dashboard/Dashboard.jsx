@@ -821,7 +821,7 @@ const Dashboard = ({ products, sales }) => {
               </div>
             </div>
           </Link>
-          <div className="group p-4 glass-card rounded-xl border border-green-100 hover:border-green-300 premium-shadow premium-hover cursor-pointer overflow-hidden relative">
+          <Link to="/soil-health" className="group p-4 glass-card rounded-xl border border-green-100 hover:border-green-300 premium-shadow premium-hover cursor-pointer overflow-hidden relative block">
             <div className="flex items-center space-x-3">
               <div className="p-2 bg-green-50 rounded-lg group-hover:bg-green-100 transition-colors">
                 <Sprout className="w-6 h-6 text-green-600" />
@@ -834,7 +834,7 @@ const Dashboard = ({ products, sales }) => {
             <div className="absolute top-0 right-0 p-1">
               <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Premium</span>
             </div>
-          </div>
+          </Link>
         </div>
       </div>
 

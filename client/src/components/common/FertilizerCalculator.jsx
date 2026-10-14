@@ -157,8 +157,8 @@ const FertilizerCalculator = () => {
   return (
     <div className="bg-gradient-to-br from-emerald-50 to-green-50 p-6 rounded-lg border border-emerald-200">
       <div className="flex items-center space-x-2 mb-6">
-        <Brain className="w-6 h-6 text-emerald-600" />
-        <h3 className="text-lg font-semibold text-gray-900">AI Crop Recommendation System</h3>
+        <Sprout className="w-6 h-6 text-emerald-600" />
+        <h3 className="text-lg font-bold text-gray-900">{t('soilHealth') || 'Soil Health'} & {t('fertilizerCalculator') || 'Fertilizer Calculator'}</h3>
       </div>
 
       <div className="space-y-6">
