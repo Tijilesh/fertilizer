@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../../utils/api'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -9,9 +9,13 @@ const SaleDetail = () => {
   const { t } = useLanguage()
   const navigate = useNavigate()
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const [sale, setSale] = useState(null)
   const [shopSettings, setShopSettings] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const initialFormat = searchParams.get('format') || 'a4'
+  const autoPrint = searchParams.get('autoPrint') === 'true'
 
   useEffect(() => {
     fetchSaleData()
@@ -55,6 +59,8 @@ const SaleDetail = () => {
       <PrintableInvoice
         sale={sale}
         shopSettings={shopSettings}
+        initialFormat={initialFormat}
+        autoPrint={autoPrint}
         onBack={() => navigate('/sales')}
       />
     </div>

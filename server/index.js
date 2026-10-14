@@ -1819,7 +1819,7 @@ app.get('/api/sales/:id', verifyToken, async (req, res) => {
     if (!sale) return res.status(404).json({ error: 'Sale not found or unauthorized' });
 
     const [items] = await db.execute(`
-      SELECT si.*, p.name, p.type, p.batch_number
+      SELECT si.*, p.name, p.type, p.batch_number, p.expiry_date, p.description
       FROM sale_items si
       JOIN products p ON si.product_id = p.id
       WHERE si.sale_id = ?

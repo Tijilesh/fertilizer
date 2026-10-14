@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Minus, Save } from 'lucide-react'
+import { ArrowLeft, Plus, Minus, Save, Printer, FileText } from 'lucide-react'
 import api from '../../utils/api'
 import { useLanguage } from '../../contexts/LanguageContext'
 import toast from 'react-hot-toast'
@@ -65,8 +65,8 @@ const AddSale = ({ products, onSuccess }) => {
     return selectedItems.reduce((sum, item) => sum + item.total_price, 0)
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const handleSubmit = async (e, printMode = null) => {
+    if (e) e.preventDefault()
 
     if (selectedItems.length === 0) {
       toast.error(t('noItemsAddedWarning'))
@@ -91,7 +91,7 @@ const AddSale = ({ products, onSuccess }) => {
     setLoading(true)
 
     try {
-      await api.post('/sales', {
+      const res = await api.post('/sales', {
         customer_name: formData.customer_name,
         customer_phone: formData.customer_phone,
         items: selectedItems,
@@ -100,8 +100,15 @@ const AddSale = ({ products, onSuccess }) => {
         payment_method: formData.payment_status === 'Paid Now' ? formData.payment_method : null
       })
 
-      onSuccess()
-      navigate('/sales')
+      toast.success(t('saleRecordedSuccess') || 'Sale recorded successfully!')
+      if (onSuccess) onSuccess()
+
+      const createdSaleId = res.data?.id
+      if (printMode && createdSaleId) {
+        navigate(`/sales/${createdSaleId}?format=${printMode}&autoPrint=true`)
+      } else {
+        navigate('/sales')
+      }
     } catch (error) {
       console.error('Error recording sale:', error)
       toast.error(error.response?.data?.error || 'Error recording sale')
@@ -301,32 +308,44 @@ const AddSale = ({ products, onSuccess }) => {
           </div>
         )}
 
-        {/* Submit */}
-        <div className="flex justify-end space-x-4">
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-gray-200">
           <button
             type="button"
             onClick={() => navigate('/sales')}
-            className="btn-secondary"
+            className="btn-secondary px-5 py-2.5 rounded-xl text-sm font-semibold"
             disabled={loading}
           >
             {t('cancel')}
           </button>
+
           <button
             type="submit"
-            className="btn-primary flex items-center space-x-2"
+            className="px-5 py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md"
             disabled={loading || selectedItems.length === 0}
           >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>{t('recording')}</span>
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                <span>{t('recordSale')}</span>
-              </>
-            )}
+            <Save className="w-4 h-4" />
+            <span>{t('recordSale') || 'Save Only'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e, 'thermal')}
+            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md shadow-indigo-600/20"
+            disabled={loading || selectedItems.length === 0}
+          >
+            <Printer className="w-4 h-4" />
+            <span>Save &amp; 3&quot; POS Thermal Slip</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e, 'a4')}
+            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-600/30"
+            disabled={loading || selectedItems.length === 0}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Save &amp; A4 Tax Invoice</span>
           </button>
         </div>
       </form>

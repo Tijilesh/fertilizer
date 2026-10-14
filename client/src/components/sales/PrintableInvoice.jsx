@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Printer, FileText, Smartphone, ArrowLeft } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Printer, FileText, Smartphone, ArrowLeft, Share2 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+import toast from 'react-hot-toast'
 
 // Helper to convert number to Indian currency words
 function numberToWords(num) {
@@ -41,8 +42,17 @@ function numberToWords(num) {
   return words.trim() + ' Rupees Only'
 }
 
-const PrintableInvoice = ({ sale, shopSettings, onBack }) => {
-  const [printFormat, setPrintFormat] = useState('a4') // 'a4' or 'thermal'
+const PrintableInvoice = ({ sale, shopSettings, onBack, initialFormat = 'a4', autoPrint = false }) => {
+  const [printFormat, setPrintFormat] = useState(initialFormat) // 'a4' or 'thermal'
+
+  useEffect(() => {
+    if (autoPrint) {
+      const timer = setTimeout(() => {
+        window.print()
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [autoPrint])
 
   const shop = {
     name: shopSettings?.shop_name || 'Kisan Agro & Fertilizer Center',
@@ -61,6 +71,41 @@ const PrintableInvoice = ({ sale, shopSettings, onBack }) => {
 
   const handlePrint = () => {
     window.print()
+  }
+
+  const handleShareWhatsApp = () => {
+    if (!sale.customer_phone) {
+      toast.error('Customer phone number not available for WhatsApp sharing')
+      return
+    }
+
+    const cleanPhone = sale.customer_phone.replace(/\D/g, '')
+    const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone
+
+    const itemListText = (sale.items || [])
+      .map((item, idx) => `${idx + 1}. ${item.name} (${item.quantity} qty) - Rs. ${parseFloat(item.total_price).toFixed(2)}`)
+      .join('\n')
+
+    const message = `🌾 *${shop.name}*
+📄 *Invoice / Bill Receipt*
+━━━━━━━━━━━━━━━━━━
+*Invoice No:* ${invoiceNumber}
+*Date:* ${new Date(sale.sale_date).toLocaleDateString()}
+*Farmer / Customer:* ${sale.customer_name || 'Farmer'}
+*Payment Mode:* ${sale.payment_method || 'Cash'}
+
+*Items Purchased:*
+${itemListText}
+
+━━━━━━━━━━━━━━━━━━
+*Total Amount:* ₹${totalAmount.toFixed(2)}
+*Payment Status:* ${sale.payment_status || 'Paid'}
+
+Thank you for your business! Happy Farming! 🚜
+${shop.address} | Ph: ${shop.phone}`
+
+    const url = `https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(message)}`
+    window.open(url, '_blank')
   }
 
   return (
@@ -100,13 +145,26 @@ const PrintableInvoice = ({ sale, shopSettings, onBack }) => {
           </button>
         </div>
 
-        <button
-          onClick={handlePrint}
-          className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/30"
-        >
-          <Printer className="w-5 h-5" />
-          Print {printFormat === 'a4' ? 'Invoice' : 'Slip'}
-        </button>
+        <div className="flex items-center gap-3">
+          {sale.customer_phone && (
+            <button
+              onClick={handleShareWhatsApp}
+              className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-all shadow-md shadow-green-600/30"
+              title="Share Bill Receipt via WhatsApp"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>WhatsApp Receipt</span>
+            </button>
+          )}
+
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/30"
+          >
+            <Printer className="w-5 h-5" />
+            Print {printFormat === 'a4' ? 'Invoice' : 'Slip'}
+          </button>
+        </div>
       </div>
 
       {/* Embedded Print Styling */}
