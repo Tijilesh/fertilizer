@@ -104,7 +104,7 @@ const AddSale = ({ products, onSuccess }) => {
       navigate('/sales')
     } catch (error) {
       console.error('Error recording sale:', error)
-      alert(error.response?.data?.error || 'Error recording sale')
+      toast.error(error.response?.data?.error || 'Error recording sale')
     } finally {
       setLoading(false)
     }

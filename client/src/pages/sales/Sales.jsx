@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Eye, ShoppingCart, Search, Trash2 } from 'lucide-react'
+import { Plus, Eye, ShoppingCart, Search, Trash2, Printer } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
@@ -143,6 +143,14 @@ const Sales = ({ sales, onRefresh }) => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
+                        <Link
+                          to={`/sales/${sale.id}`}
+                          className="text-emerald-600 hover:text-emerald-900 flex items-center justify-center space-x-1"
+                          title="Print Invoice / Bill"
+                        >
+                          <Printer className="w-4 h-4" />
+                          <span>Invoice</span>
+                        </Link>
                         <Link
                           to={`/sales/${sale.id}`}
                           className="text-primary-600 hover:text-primary-900 flex items-center justify-center space-x-1"

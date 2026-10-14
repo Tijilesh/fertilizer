@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { User, Phone, Mail, MapPin, Maximize, Sprout, CreditCard, DollarSign, Calendar, TrendingUp } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { User, Phone, Mail, MapPin, Maximize, Sprout, CreditCard, DollarSign, TrendingUp } from 'lucide-react';
 import api from '../../utils/api';
 
 const Profile = () => {
-  const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

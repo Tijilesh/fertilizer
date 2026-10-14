@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Trash2, Eye, Users, TrendingUp, Phone, MapPin, Edit } from 'lucide-react'
-import { useLanguage } from '../../contexts/LanguageContext'
+import { Plus, Search, Trash2, Eye, Users, TrendingUp, Phone, MapPin, Edit, MessageSquare } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
+import { WhatsAppReminderModal } from '../../components/common'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const Farmers = () => {
   const { t } = useLanguage()
@@ -13,6 +14,7 @@ const Farmers = () => {
   const [filterStatus, setFilterStatus] = useState('all')
   const hasFetchedRef = useRef(false)
   const [editingFarmer, setEditingFarmer] = useState(null)
+  const [reminderFarmer, setReminderFarmer] = useState(null)
 
   useEffect(() => {
     if (hasFetchedRef.current) return
@@ -74,13 +76,13 @@ const Farmers = () => {
             <Users className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-3xl font-black tracking-tight">Farmer Management</h1>
-            <p className="text-green-100 mt-1">{farmers.length} farmers in database</p>
+            <h1 className="text-3xl font-black tracking-tight">{t('farmerManagement') || 'Farmer Management'}</h1>
+            <p className="text-green-100 mt-1">{farmers.length} {t('farmersInDatabase') || 'farmers in database'}</p>
           </div>
         </div>
         <Link to="/farmers/add" className="bg-white text-green-600 px-6 py-3 rounded-xl font-bold hover:bg-green-50 transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
           <Plus className="w-5 h-5" />
-          <span>Add Farmer</span>
+          <span>{t('addFarmer') || 'Add Farmer'}</span>
         </Link>
       </div>
 
@@ -89,7 +91,7 @@ const Farmers = () => {
         <div className="glass-card premium-shadow p-6 rounded-2xl border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Farmers</p>
+              <p className="text-sm font-medium text-gray-600">{t('totalFarmers') || 'Total Farmers'}</p>
               <p className="text-3xl font-bold text-green-600">{farmers.length}</p>
             </div>
             <div className="p-3 bg-green-100 rounded-full">
@@ -100,7 +102,7 @@ const Farmers = () => {
         <div className="glass-card premium-shadow p-6 rounded-2xl border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Active Farmers</p>
+              <p className="text-sm font-medium text-gray-600">{t('activeFarmers') || 'Active Farmers'}</p>
               <p className="text-3xl font-bold text-blue-600">{farmers.filter(f => f.status === 'active').length}</p>
             </div>
             <div className="p-3 bg-blue-100 rounded-full">
@@ -111,7 +113,7 @@ const Farmers = () => {
         <div className="glass-card premium-shadow p-6 rounded-2xl border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Spent</p>
+              <p className="text-sm font-medium text-gray-600">{t('totalSpent') || 'Total Spent'}</p>
               <p className="text-3xl font-bold text-emerald-600">₹{farmers.reduce((sum, f) => sum + (parseFloat(f.total_spent) || 0), 0).toLocaleString()}</p>
             </div>
             <div className="p-3 bg-emerald-100 rounded-full">
@@ -127,7 +129,7 @@ const Farmers = () => {
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 group-hover:text-green-500 transition-colors" />
           <input
             type="text"
-            placeholder="Search by name, phone, or email..."
+            placeholder={t('searchFarmersPlaceholder') || 'Search by name, phone, or email...'}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-white/50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all outline-none"
@@ -139,9 +141,9 @@ const Farmers = () => {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
           >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            <option value="all">{t('allStatus') || 'All Status'}</option>
+            <option value="active">{t('active') || 'Active'}</option>
+            <option value="inactive">{t('inactive') || 'Inactive'}</option>
           </select>
         </div>
       </div>
@@ -172,21 +174,27 @@ const Farmers = () => {
 
               <div className="space-y-2 mb-4 border-t pt-4">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Farm Size:</span>
-                  <span className="font-medium">{farmer.farm_size || 'N/A'} acres</span>
+                  <span className="text-gray-600">{t('landArea') || 'Farm Size'}:</span>
+                  <span className="font-medium">{farmer.farm_size || 'N/A'} {t('acres') || 'acres'}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Crop Type:</span>
+                  <span className="text-gray-600">{t('cropType') || 'Crop Type'}:</span>
                   <span className="font-medium">{farmer.crop_type || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Purchases:</span>
+                  <span className="text-gray-600">{t('purchases') || 'Purchases'}:</span>
                   <span className="font-medium">{farmer.total_purchases || 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Total Spent:</span>
+                  <span className="text-gray-600">{t('totalSpent') || 'Total Spent'}:</span>
                   <span className="font-bold text-green-600">₹{(parseFloat(farmer.total_spent) || 0).toLocaleString()}</span>
                 </div>
+                {(parseFloat(farmer.current_credit || 0) + parseFloat(farmer.accrued_interest || 0)) > 0 && (
+                  <div className="flex justify-between text-sm pt-1 border-t border-dashed">
+                    <span className="text-red-600 font-semibold">{t('creditBalance') || 'Credit Balance'}:</span>
+                    <span className="font-bold text-red-600">₹{(parseFloat(farmer.current_credit || 0) + parseFloat(farmer.accrued_interest || 0)).toFixed(2)}</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex space-x-2">
@@ -195,21 +203,30 @@ const Farmers = () => {
                   className="flex-1 px-3 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 flex items-center justify-center space-x-1"
                 >
                   <Eye className="w-4 h-4" />
-                  <span>View</span>
+                  <span>{t('view') || 'View'}</span>
                 </Link>
                 <Link
                   to={`/farmers/edit/${farmer.id}`}
                   className="flex-1 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 flex items-center justify-center space-x-1"
                 >
                   <Edit className="w-4 h-4" />
-                  <span>Edit</span>
+                  <span>{t('edit') || 'Edit'}</span>
                 </Link>
+                {(parseFloat(farmer.current_credit || 0) + parseFloat(farmer.accrued_interest || 0)) > 0 && (
+                  <button
+                    onClick={() => setReminderFarmer(farmer)}
+                    className="p-2 text-sm font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 flex items-center justify-center transition"
+                    title={t('sendWhatsAppReminder') || 'Send WhatsApp Payment Reminder'}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   onClick={() => handleDeleteFarmer(farmer.id, farmer.name)}
-                  className="flex-1 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 flex items-center justify-center space-x-1"
+                  className="p-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 flex items-center justify-center"
+                  title={t('delete') || 'Delete Farmer'}
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Delete</span>
                 </button>
               </div>
             </div>
@@ -218,15 +235,15 @@ const Farmers = () => {
       ) : (
         <div className="text-center py-12">
           <Users className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-900">No farmers found</h3>
+          <h3 className="mt-4 text-lg font-medium text-gray-900">{t('noFarmersFound') || 'No farmers found'}</h3>
           <p className="mt-2 text-gray-600 mb-6">
             {searchTerm || filterStatus !== 'all'
-              ? 'Try adjusting your search or filters'
-              : 'Get started by adding your first farmer'}
+              ? (t('adjustSearchFilter') || 'Try adjusting your search or filters')
+              : (t('startAddingFarmer') || 'Get started by adding your first farmer')}
           </p>
           {!searchTerm && filterStatus === 'all' && (
             <Link to="/farmers/add" className="btn-primary">
-              Add First Farmer
+              {t('addFarmer') || 'Add First Farmer'}
             </Link>
           )}
         </div>
@@ -265,6 +282,13 @@ const Farmers = () => {
           </div>
         </div>
       )}
+
+      {/* WhatsApp Reminder Modal */}
+      <WhatsAppReminderModal
+        isOpen={Boolean(reminderFarmer)}
+        onClose={() => setReminderFarmer(null)}
+        farmer={reminderFarmer}
+      />
     </div>
   )
 }

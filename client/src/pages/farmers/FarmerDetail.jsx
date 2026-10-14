@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Edit2, Calendar, DollarSign, ShoppingCart, Phone, Mail, MapPin, Sprout, Zap } from 'lucide-react'
+import { ArrowLeft, Edit2, Calendar, DollarSign, ShoppingCart, Phone, Mail, MapPin, Sprout, Zap, MessageSquare, Store, Globe } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import FarmerCreditManagement from './FarmerCreditManagement'
+import { WhatsAppReminderModal } from '../../components/common'
 import { useAuth } from '../../contexts/AuthContext'
 
 const FarmerDetail = () => {
@@ -14,6 +15,7 @@ const FarmerDetail = () => {
   const [sales, setSales] = useState([])
   const [onlineOrders, setOnlineOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
 
   useEffect(() => {
     fetchFarmerDetails()
@@ -24,7 +26,14 @@ const FarmerDetail = () => {
       setLoading(true)
       const response = await api.get(`/farmers/${id}`)
       setFarmer(response.data)
-      setSales(response.data.sales || [])
+      // Exclude online orders from the in-store/walk-in purchases list
+      const rawSales = response.data.sales || []
+      const walkInSales = rawSales.filter(s => {
+        const type = (s.sale_type || '').toLowerCase()
+        const method = (s.payment_method || '').toLowerCase()
+        return type !== 'online' && !method.includes('online') && method !== 'cash on delivery' && method !== 'cod'
+      })
+      setSales(walkInSales)
       setOnlineOrders(response.data.onlineOrders || [])
     } catch (error) {
       toast.error('Failed to load farmer details')
@@ -68,13 +77,24 @@ const FarmerDetail = () => {
               {farmer.status.charAt(0).toUpperCase() + farmer.status.slice(1)}
             </p>
           </div>
-          <button
-            onClick={() => navigate(`/farmers/edit/${farmer.id}`)}
-            className="btn-primary flex items-center space-x-2 px-6 py-3 rounded-xl"
-          >
-            <Edit2 className="w-5 h-5" />
-            <span>Edit</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {((parseFloat(farmer?.current_credit || 0) + parseFloat(farmer?.accrued_interest || 0)) > 0) && (
+              <button
+                onClick={() => setShowWhatsAppModal(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center space-x-2 px-5 py-3 rounded-xl font-bold shadow-md shadow-emerald-600/20 transition-all text-sm"
+              >
+                <MessageSquare className="w-5 h-5" />
+                <span>WhatsApp Reminder</span>
+              </button>
+            )}
+            <button
+              onClick={() => navigate(`/farmers/edit/${farmer.id}`)}
+              className="btn-primary flex items-center space-x-2 px-6 py-3 rounded-xl"
+            >
+              <Edit2 className="w-5 h-5" />
+              <span>Edit</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -215,9 +235,22 @@ const FarmerDetail = () => {
         <FarmerCreditManagement farmer={farmer} onUpdate={fetchFarmerDetails} />
       )}
 
-      {/* Purchase History */}
+      {/* Walk-in / In-Store Purchase History */}
       <div className="glass-card premium-shadow p-8 rounded-3xl border mt-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Purchase History</h2>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-blue-50 text-blue-700 rounded-2xl">
+              <Store className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">In-Store / Walk-in Purchase History</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Purchases billed directly at the store counter</p>
+            </div>
+          </div>
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+            {sales.length} In-Store {sales.length === 1 ? 'Sale' : 'Sales'}
+          </span>
+        </div>
         
         {sales && sales.length > 0 ? (
           <div className="overflow-x-auto">
@@ -225,6 +258,7 @@ const FarmerDetail = () => {
               <thead>
                 <tr className="border-b-2 border-gray-200">
                   <th className="text-left py-3 px-4 font-bold text-gray-700">Date</th>
+                  <th className="text-left py-3 px-4 font-bold text-gray-700">Type</th>
                   <th className="text-left py-3 px-4 font-bold text-gray-700">Items</th>
                   <th className="text-left py-3 px-4 font-bold text-gray-700">Amount</th>
                   <th className="text-left py-3 px-4 font-bold text-gray-700">Payment Method</th>
@@ -236,6 +270,12 @@ const FarmerDetail = () => {
                   <tr key={sale.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-4 px-4 text-sm text-gray-900">
                       {new Date(sale.sale_date).toLocaleDateString()}
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                        <Store className="w-3 h-3 mr-1" />
+                        Walk-in
+                      </span>
                     </td>
                     <td className="py-4 px-4 text-sm text-gray-700">{sale.items || '-'}</td>
                     <td className="py-4 px-4 text-sm font-bold text-green-600">₹{sale.total_amount?.toLocaleString()}</td>
@@ -256,15 +296,28 @@ const FarmerDetail = () => {
           </div>
         ) : (
           <div className="text-center py-12 text-gray-600">
-            <ShoppingCart className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <p>No in-store purchase history for this farmer</p>
+            <Store className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <p>No in-store walk-in purchase history for this farmer</p>
           </div>
         )}
       </div>
 
       {/* Online Orders History */}
       <div className="glass-card premium-shadow p-8 rounded-3xl border">
-        <h2 className="text-2xl font-bold text-teal-900 mb-6">Online Orders History</h2>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-teal-50 text-teal-700 rounded-2xl">
+              <Globe className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-teal-900">Online Orders History</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Orders placed through website or mobile catalog</p>
+            </div>
+          </div>
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-teal-100 text-teal-800">
+            {onlineOrders.length} Online {onlineOrders.length === 1 ? 'Order' : 'Orders'}
+          </span>
+        </div>
         
         {onlineOrders && onlineOrders.length > 0 ? (
           <div className="overflow-x-auto">
@@ -272,6 +325,7 @@ const FarmerDetail = () => {
               <thead>
                 <tr className="border-b-2 border-teal-200">
                   <th className="text-left py-3 px-4 font-bold text-teal-700">Date</th>
+                  <th className="text-left py-3 px-4 font-bold text-teal-700">Type</th>
                   <th className="text-left py-3 px-4 font-bold text-teal-700">Order ID</th>
                   <th className="text-left py-3 px-4 font-bold text-teal-700">Items</th>
                   <th className="text-left py-3 px-4 font-bold text-teal-700">Amount</th>
@@ -283,6 +337,12 @@ const FarmerDetail = () => {
                   <tr key={order.id} className="border-b border-gray-100 hover:bg-teal-50/50">
                     <td className="py-4 px-4 text-sm text-gray-900">
                       {new Date(order.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200">
+                        <Globe className="w-3 h-3 mr-1" />
+                        Online
+                      </span>
                     </td>
                     <td className="py-4 px-4 text-sm font-medium text-teal-700">{order.order_number}</td>
                     <td className="py-4 px-4 text-sm text-gray-700">{order.items || '-'}</td>
@@ -303,11 +363,20 @@ const FarmerDetail = () => {
           </div>
         ) : (
           <div className="text-center py-12 text-gray-600">
-            <ShoppingCart className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <Globe className="mx-auto h-12 w-12 text-teal-400 mb-4" />
             <p>No online orders for this farmer</p>
           </div>
         )}
       </div>
+
+      {showWhatsAppModal && (
+        <WhatsAppReminderModal
+          isOpen={showWhatsAppModal}
+          onClose={() => setShowWhatsAppModal(false)}
+          farmer={farmer}
+          totalDue={parseFloat(farmer?.current_credit || 0) + parseFloat(farmer?.accrued_interest || 0)}
+        />
+      )}
     </div>
   )
 }

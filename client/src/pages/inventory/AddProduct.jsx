@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Save } from 'lucide-react'
+import toast from 'react-hot-toast'
 import api from '../../utils/api'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -40,7 +41,7 @@ const AddProduct = ({ onSuccess }) => {
       navigate('/products')
     } catch (error) {
       console.error('Error adding product:', error)
-      alert(error.response?.data?.error || t('errorAddingProduct') || 'Error adding product')
+      toast.error(error.response?.data?.error || t('errorAddingProduct') || 'Error adding product')
     } finally {
       setLoading(false)
     }

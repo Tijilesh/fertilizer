@@ -4,8 +4,6 @@ import { QRCodeSVG } from 'qrcode.react'
 import {
   ShoppingCart,
   Trash2,
-  Plus,
-  Minus,
   ArrowRight,
   ShieldCheck,
   CreditCard,
@@ -13,7 +11,6 @@ import {
   Star,
   X,
   Smartphone,
-  Globe,
   MapPin,
   CheckCircle2,
   ChevronDown,

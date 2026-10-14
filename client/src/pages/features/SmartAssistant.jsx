@@ -104,7 +104,9 @@ const SmartAssistant = () => {
           const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)
           const geoData = await geoRes.json()
           locName = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.state || locName
-        } catch(e) {}
+        } catch (_e) {
+          // Ignore reverse geocoding error and fallback to default
+        }
 
         const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,precipitation,weather_code`)
         const data = await res.json()
@@ -148,7 +150,6 @@ const SmartAssistant = () => {
     }
 
     fetchWeather()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [farmData.mainCrop])
 
   const handleSendMessage = async (e) => {

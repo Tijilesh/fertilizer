@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Edit, Trash2, Package, Sprout, Leaf, Search, Filter, Upload } from 'lucide-react'
+import { Plus, Edit, Trash2, Sprout, Leaf, Search, Filter, Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import toast from 'react-hot-toast'
 import api from '../../utils/api'
 import VoiceInputButton from '../../components/common/VoiceInputButton'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -35,21 +36,21 @@ const Products = ({ products, onRefresh }) => {
         })).filter(p => p.name && p.price > 0);
 
         if (parsedProducts.length === 0) {
-          alert('No valid products found in the file. Ensure you have "name" and "price" columns.');
-          return;
+          toast.error('No valid products found in the file. Ensure you have "name" and "price" columns.')
+          return
         }
 
-        const res = await api.post('/products/bulk', { products: parsedProducts });
-        alert(`Success: ${res.data.message}`);
-        onRefresh();
+        const res = await api.post('/products/bulk', { products: parsedProducts })
+        toast.success(res.data.message || 'Products imported successfully')
+        onRefresh()
       } catch (err) {
-        console.error('Error importing products:', err);
-        alert('Failed to import products. Check file format.');
+        console.error('Error importing products:', err)
+        toast.error(err.response?.data?.error || 'Failed to import products. Check file format.')
       }
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    reader.readAsBinaryString(file);
-  };
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+    reader.readAsBinaryString(file)
+  }
 
   const productList = Array.isArray(products) ? products : []
 
@@ -71,7 +72,7 @@ const Products = ({ products, onRefresh }) => {
         onRefresh()
       } catch (error) {
         console.error('Error deleting product:', error)
-        alert(t('errorDeletingProduct') || 'Error deleting product')
+        toast.error(error.response?.data?.error || t('errorDeletingProduct') || 'Error deleting product')
       }
     }
   }

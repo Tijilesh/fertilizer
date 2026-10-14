@@ -22,10 +22,10 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
       
       // 2. Admin Core Business (POS & Online Orders)
       { path: '/sales', label: t('sales'), icon: TrendingUp, roles: ['owner', 'admin'], color: 'text-emerald-600' },
-      { path: '/manage-orders', label: 'Online Orders', icon: ShoppingBag, roles: ['owner', 'admin'], color: 'text-teal-600' },
+      { path: '/manage-orders', label: t('manageOrders') || 'Online Orders', icon: ShoppingBag, roles: ['owner', 'admin'], color: 'text-teal-600' },
       
       // 3. User Shop Features
-      { path: '/profile', label: 'My Profile', icon: User, roles: ['user'], color: 'text-blue-600' },
+      { path: '/profile', label: t('myProfile') || 'My Profile', icon: User, roles: ['user'], color: 'text-blue-600' },
       { path: '/shop', label: t('shop'), icon: Leaf, roles: ['user'], color: 'text-green-600' },
       { path: '/cart', label: t('cart'), icon: ShoppingCart, roles: ['user'], badge: getCartItemCount(), color: 'text-orange-600' },
       { path: '/orders', label: t('orders'), icon: Receipt, roles: ['user'], color: 'text-purple-600' },
@@ -46,7 +46,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
       
       // 7. Admin Analytics & Settings
       { path: '/reports', label: t('reports'), icon: Wheat, roles: ['owner', 'admin'], color: 'text-amber-600' },
-      { path: '/settings', label: 'Settings', icon: Settings, roles: ['owner', 'admin'], color: 'text-gray-600' },
+      { path: '/settings', label: t('settings') || 'Settings', icon: Settings, roles: ['owner', 'admin'], color: 'text-gray-600' },
     ]
 
     return allItems

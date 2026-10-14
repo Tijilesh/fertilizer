@@ -1,12 +1,20 @@
 import { useState, useEffect } from 'react'
-import { Settings, Save, Smartphone, Store, Copy, Check } from 'lucide-react'
+import { Settings, Save, Store, Copy, Check } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
+import { CompatibilityRulesManager } from '../../components/common'
 
 const AdminSettings = () => {
   const { user } = useAuth()
-  const [upiId, setUpiId] = useState('')
+  const [shopProfile, setShopProfile] = useState({
+    shop_name: 'Kisan Agro & Fertilizer Center',
+    shop_phone: '+91 98765 43210',
+    shop_address: 'Main Market Mandi, Station Road',
+    shop_gstin: '09AAACK1234M1Z5',
+    shop_license: 'FERT/DL/2024/481',
+    upi_id: ''
+  })
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -17,8 +25,11 @@ const AdminSettings = () => {
   const fetchSettings = async () => {
     try {
       const res = await api.get('/settings')
-      if (res.data && res.data.upi_id) {
-        setUpiId(res.data.upi_id)
+      if (res.data) {
+        setShopProfile(prev => ({
+          ...prev,
+          ...res.data
+        }))
       }
     } catch (error) {
       console.error('Failed to fetch settings', error)
@@ -30,8 +41,8 @@ const AdminSettings = () => {
     e.preventDefault()
     setLoading(true)
     try {
-      await api.post('/settings', { settings: { upi_id: upiId } })
-      toast.success('Settings saved successfully')
+      await api.post('/settings', { settings: shopProfile })
+      toast.success('Shop and billing settings saved successfully')
     } catch (error) {
       console.error('Failed to save settings', error)
       toast.error('Failed to save settings')
@@ -91,22 +102,79 @@ const AdminSettings = () => {
 
       <div className="glass-card premium-shadow bg-white rounded-[2rem] p-8 border-2 border-white/50">
         <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <Smartphone className="w-6 h-6 text-teal-600" />
-          Payment Settings
+          <Store className="w-6 h-6 text-teal-600" />
+          Store Profile &amp; Billing Details
         </h2>
         
-        <form onSubmit={handleSave} className="space-y-6 max-w-xl">
+        <form onSubmit={handleSave} className="space-y-5 max-w-2xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Shop / Business Name</label>
+              <input
+                type="text"
+                value={shopProfile.shop_name}
+                onChange={(e) => setShopProfile({ ...shopProfile, shop_name: e.target.value })}
+                placeholder="e.g. Kisan Agro & Fertilizer Center"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Contact Phone</label>
+              <input
+                type="text"
+                value={shopProfile.shop_phone}
+                onChange={(e) => setShopProfile({ ...shopProfile, shop_phone: e.target.value })}
+                placeholder="e.g. +91 98765 43210"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+              />
+            </div>
+          </div>
+
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Shop UPI ID</label>
+            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Shop Address</label>
             <input
               type="text"
-              value={upiId}
-              onChange={(e) => setUpiId(e.target.value)}
-              placeholder="e.g. yourname@okicici"
-              className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all outline-none font-medium"
+              value={shopProfile.shop_address}
+              onChange={(e) => setShopProfile({ ...shopProfile, shop_address: e.target.value })}
+              placeholder="e.g. Main Market Mandi, Station Road"
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
             />
-            <p className="text-xs text-gray-500 mt-2">
-              Customers will see this UPI ID and a QR code to make payments.
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">GSTIN / Tax ID</label>
+              <input
+                type="text"
+                value={shopProfile.shop_gstin}
+                onChange={(e) => setShopProfile({ ...shopProfile, shop_gstin: e.target.value })}
+                placeholder="e.g. 09AAACK1234M1Z5"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Fertilizer Dealer License No.</label>
+              <input
+                type="text"
+                value={shopProfile.shop_license}
+                onChange={(e) => setShopProfile({ ...shopProfile, shop_license: e.target.value })}
+                placeholder="e.g. FERT/DL/2024/481"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-mono"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Shop UPI ID (For QR Payments)</label>
+            <input
+              type="text"
+              value={shopProfile.upi_id}
+              onChange={(e) => setShopProfile({ ...shopProfile, upi_id: e.target.value })}
+              placeholder="e.g. yourshop@okhdfcbank"
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Printed on bills and displayed as a QR code for farmers to scan and pay.
             </p>
           </div>
 
@@ -120,6 +188,9 @@ const AdminSettings = () => {
           </button>
         </form>
       </div>
+
+      {/* Fertilizer Compatibility Rules Management */}
+      <CompatibilityRulesManager />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Save } from 'lucide-react'
+import toast from 'react-hot-toast'
 import api from '../../utils/api'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -37,7 +38,7 @@ const EditProduct = ({ onSuccess }) => {
       })
     } catch (error) {
       console.error('Error fetching product:', error)
-      alert(t('errorLoadingProduct') || 'Error loading product')
+      toast.error(t('errorLoadingProduct') || 'Error loading product')
       navigate('/products')
     } finally {
       setInitialLoading(false)
@@ -67,7 +68,7 @@ const EditProduct = ({ onSuccess }) => {
       navigate('/products')
     } catch (error) {
       console.error('Error updating product:', error)
-      alert(error.response?.data?.error || t('errorUpdatingProduct') || 'Error updating product')
+      toast.error(error.response?.data?.error || t('errorUpdatingProduct') || 'Error updating product')
     } finally {
       setLoading(false)
     }

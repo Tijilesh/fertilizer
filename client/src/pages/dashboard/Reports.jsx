@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BarChart3, Package, TrendingUp, AlertTriangle } from 'lucide-react'
+import toast from 'react-hot-toast'
 import api from '../../utils/api'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -49,7 +50,7 @@ const Reports = () => {
 
   const fetchSalesReport = async () => {
     if (!dateRange.start_date || !dateRange.end_date) {
-      alert('Please select both start and end dates')
+      toast.error('Please select both start and end dates')
       return
     }
 

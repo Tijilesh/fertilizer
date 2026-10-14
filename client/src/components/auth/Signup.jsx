@@ -164,66 +164,84 @@ const Signup = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center p-4">
-      {/* Background Pattern */}
+    <div className="relative min-h-screen auth-bg-mesh flex items-center justify-center p-4 selection:bg-emerald-500 selection:text-white overflow-hidden">
+      {/* Subtle Grid Pattern Overlay */}
+      <div className="absolute inset-0 auth-grid-pattern pointer-events-none"></div>
+
+      {/* Ambient Lighting Orbs */}
+      <div className="absolute top-10 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none animate-float"></div>
+      <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-teal-500/20 rounded-full blur-3xl pointer-events-none animate-float-delayed"></div>
+      <div className="absolute -top-20 -right-20 w-80 h-80 bg-green-400/15 rounded-full blur-2xl pointer-events-none"></div>
+      <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-emerald-600/15 rounded-full blur-2xl pointer-events-none"></div>
+
+      {/* Floating Themed Icons */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-200 rounded-full opacity-20"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-emerald-200 rounded-full opacity-20"></div>
-        <div className="absolute top-20 left-20 text-green-300 opacity-10"><Leaf className="w-16 h-16" /></div>
-        <div className="absolute bottom-20 right-20 text-emerald-300 opacity-10"><Sprout className="w-12 h-12" /></div>
-        <div className="absolute top-1/2 left-10 text-teal-300 opacity-10"><Cloud className="w-8 h-8" /></div>
+        <div className="absolute top-16 left-12 text-emerald-600/15 animate-float"><Leaf className="w-16 h-16" /></div>
+        <div className="absolute bottom-16 right-16 text-teal-600/15 animate-float-delayed"><Sprout className="w-14 h-14" /></div>
+        <div className="absolute top-1/3 right-12 text-emerald-500/15 animate-float"><Cloud className="w-12 h-12" /></div>
+        <div className="absolute bottom-1/3 left-10 text-teal-500/15 animate-float-delayed"><Sun className="w-12 h-12" /></div>
       </div>
 
-      <div className="relative max-w-lg w-full">
+      <div className="relative max-w-lg w-full my-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="p-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full shadow-lg">
-              {step === 'otp' ? <ShieldCheck className="w-12 h-12 text-white" /> : <Sprout className="w-12 h-12 text-white" />}
+          <div className="flex justify-center mb-5">
+            <div className="relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-emerald-400 to-teal-300 rounded-2xl blur-sm opacity-60 group-hover:opacity-100 transition duration-300"></div>
+              <div className="relative p-4 bg-gradient-to-br from-emerald-600 to-green-700 rounded-2xl shadow-xl shadow-emerald-700/20 border border-emerald-400/30">
+                {step === 'otp' ? <ShieldCheck className="w-12 h-12 text-white drop-shadow-md" /> : <Sprout className="w-12 h-12 text-white drop-shadow-md" />}
+              </div>
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {step === 'otp' ? 'Verify Your Email' : 'Join Fertilizer Shop'}
+          <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight mb-2">
+            {step === 'otp' ? 'Verify Your Email' : (
+              <>
+                Join{' '}
+                <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-700 bg-clip-text text-transparent">
+                  Fertilizer Shop
+                </span>
+              </>
+            )}
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-600 font-normal text-sm max-w-sm mx-auto">
             {step === 'otp'
-              ? `We sent a 6-digit OTP to ${formData.email}`
-              : 'Start your journey towards better farming practices'}
+              ? `We sent a 6-digit verification code to ${formData.email}`
+              : 'Start your journey towards higher yields & sustainable farming'}
           </p>
           {step === 'form' && (
-            <div className="flex justify-center items-center mt-4 space-x-2">
-              <Sun className="w-5 h-5 text-yellow-500" />
-              <span className="text-sm text-gray-500">Growing Communities, Harvesting Futures</span>
-              <Sun className="w-5 h-5 text-yellow-500" />
+            <div className="inline-flex items-center mt-3.5 px-4 py-1.5 rounded-full bg-emerald-100/80 border border-emerald-200/90 text-emerald-800 shadow-sm space-x-2">
+              <Sun className="w-4 h-4 text-amber-500" />
+              <span className="text-xs font-bold tracking-wide">Growing Communities, Harvesting Futures</span>
+              <Sun className="w-4 h-4 text-amber-500" />
             </div>
           )}
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center justify-center gap-3 mb-6">
-          <div className={`flex items-center gap-2 text-sm font-medium ${step === 'form' ? 'text-green-600' : 'text-green-400'}`}>
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 'form' ? 'bg-green-600 text-white' : 'bg-green-200 text-green-700'}`}>1</div>
-            Fill Details
+        <div className="flex items-center justify-center gap-3 mb-6 bg-white/80 p-2.5 rounded-2xl border border-emerald-100 shadow-sm backdrop-blur-md max-w-sm mx-auto">
+          <div className={`flex items-center gap-2 text-xs font-semibold ${step === 'form' ? 'text-emerald-700' : 'text-gray-400'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === 'form' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-emerald-100 text-emerald-800'}`}>1</div>
+            Details
           </div>
-          <div className="h-px w-8 bg-gray-300"></div>
-          <div className={`flex items-center gap-2 text-sm font-medium ${step === 'otp' ? 'text-green-600' : 'text-gray-400'}`}>
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 'otp' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-500'}`}>2</div>
-            Verify Email
+          <div className="h-px w-6 bg-gray-200"></div>
+          <div className={`flex items-center gap-2 text-xs font-semibold ${step === 'otp' ? 'text-emerald-700' : 'text-gray-400'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === 'otp' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-gray-100 text-gray-500'}`}>2</div>
+            Verify
           </div>
-          <div className="h-px w-8 bg-gray-300"></div>
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-gray-200 text-gray-500">3</div>
+          <div className="h-px w-6 bg-gray-200"></div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-gray-400">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-400">3</div>
             Done
           </div>
         </div>
 
-        <div className="glass-card premium-shadow p-10 rounded-3xl border border-white/40 backdrop-blur-xl">
+        <div className="bg-white/95 backdrop-blur-xl p-8 sm:p-10 rounded-3xl border border-emerald-100 shadow-[0_20px_45px_-15px_rgba(5,150,105,0.12),0_10px_25px_-5px_rgba(0,0,0,0.06)] relative">
           {/* ── STEP 1: Registration Form ── */}
           {step === 'form' && (
             <>
               <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Create Account</h2>
-                <p className="text-gray-600 mt-2">Join thousands of farmers using our platform</p>
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Create Account</h2>
+                <p className="text-gray-500 text-sm mt-1">Join thousands of farmers using our platform</p>
               </div>
 
               <form onSubmit={handleSendOtp} className="space-y-5">
@@ -364,16 +382,16 @@ const Signup = () => {
 
                 <button
                   type="submit" disabled={loading}
-                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-4 px-6 rounded-xl font-bold text-lg hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 active:scale-[0.98]"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 px-6 rounded-xl font-bold text-base focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-emerald-600/30 hover:shadow-xl hover:shadow-emerald-600/40 transform hover:-translate-y-0.5 active:scale-[0.98]"
                 >
                   {loading ? (
                     <div className="flex items-center justify-center gap-3">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                       <span>Sending OTP...</span>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center gap-3">
-                      <Mail className="w-6 h-6" />
+                      <Mail className="w-5 h-5" />
                       <span>Send Verification OTP</span>
                     </div>
                   )}
@@ -446,16 +464,16 @@ const Signup = () => {
 
                 <button
                   type="submit" disabled={loading || otp.join('').length !== 6}
-                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-4 px-6 rounded-xl font-bold text-lg hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 active:scale-[0.98]"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 px-6 rounded-xl font-bold text-base focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-emerald-600/30 hover:shadow-xl hover:shadow-emerald-600/40 transform hover:-translate-y-0.5 active:scale-[0.98]"
                 >
                   {loading ? (
                     <div className="flex items-center justify-center gap-3">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                       <span>Verifying...</span>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center gap-3">
-                      <ShieldCheck className="w-6 h-6" />
+                      <ShieldCheck className="w-5 h-5" />
                       <span>Verify & Create Account</span>
                     </div>
                   )}
@@ -468,7 +486,7 @@ const Signup = () => {
                     type="button"
                     onClick={handleResend}
                     disabled={resendTimer > 0 || loading}
-                    className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-green-600 hover:text-green-700 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                    className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-emerald-600 hover:text-emerald-700 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
                   >
                     <RefreshCw className="w-4 h-4" />
                     {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
@@ -480,7 +498,7 @@ const Signup = () => {
         </div>
 
         <div className="text-center mt-6">
-          <p className="text-sm text-gray-500">
+          <p className="text-xs text-gray-500 tracking-wide font-medium">
             🌱 Building sustainable farming communities worldwide 🌱
           </p>
         </div>

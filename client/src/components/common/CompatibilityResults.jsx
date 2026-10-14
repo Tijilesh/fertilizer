@@ -72,7 +72,7 @@ const CompatibilityResults = ({ result, onReset }) => {
           </h5>
           {result.cropAdvice.map((advice, index) => (
             <div key={index} className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg mb-2">
-              <p className="text-sm font-bold text-indigo-900 mb-1">{advice.product_name} x {result.crop_name || 'Selected Crop'}</p>
+              <p className="text-sm font-bold text-indigo-900 mb-1">{advice.product_name} x {result.cropName || result.crop_name || 'Selected Crop'}</p>
               <p className="text-sm text-indigo-800"><span className="font-semibold">Advice:</span> {advice.compatibility_notes}</p>
               {advice.recommended_dosage && (
                 <p className="text-xs text-indigo-700 mt-1"><span className="font-semibold">Recommended Dosage:</span> {advice.recommended_dosage}</p>
@@ -87,7 +87,7 @@ const CompatibilityResults = ({ result, onReset }) => {
 
       {/* Recommendations */}
       {result.recommendations && result.recommendations.length > 0 && (
-        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 mb-4">
           <h5 className="font-medium text-blue-800 mb-2">Recommendations</h5>
           <ul className="text-sm text-blue-700 space-y-1">
             {result.recommendations.map((rec, index) => (
@@ -99,6 +99,14 @@ const CompatibilityResults = ({ result, onReset }) => {
           </ul>
         </div>
       )}
+
+      {/* Agricultural Disclaimer */}
+      <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-800 flex items-start space-x-2">
+        <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5" />
+        <p>
+          <span className="font-semibold">Important Disclaimer:</span> Always perform a jar test (small-scale physical compatibility test) before mixing large volumes in the field. Weather conditions and water quality can affect chemical stability.
+        </p>
+      </div>
 
       <button
         onClick={onReset}

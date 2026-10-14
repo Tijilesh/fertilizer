@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Building, FileText, ExternalLink, Users, TrendingUp, Calculator, AlertTriangle, BookOpen, Loader2 } from 'lucide-react'
-import Sidebar from '../../components/Navbar'
+import { Building, ExternalLink, Users, TrendingUp, Calculator, AlertTriangle, BookOpen, Loader2 } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -9,7 +8,6 @@ import { DEMO_SCHEMES } from '../../data/demoData'
 
 const GovernmentSchemes = () => {
   const { t } = useLanguage()
-  const [isCollapsed, setIsCollapsed] = useState(false)
   const [schemes, setSchemes] = useState([])
   const [loading, setLoading] = useState(true)
 

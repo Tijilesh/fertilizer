@@ -181,7 +181,9 @@ const OrderHistory = () => {
                         </h3>
                       )}
                     </div>
-                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-3 pt-3 border-t border-gray-100">Order ID: {order.order_number}</p>
+                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-3 pt-3 border-t border-gray-100">
+                      {order.purchase_type === 'in-store' ? `In-Store Receipt: #REC-${order.id}` : `Order ID: ${order.order_number || `ORD-${order.id}`}`}
+                    </p>
                   </div>
 
                   {/* Price */}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle, Calendar, Package, Clock, CheckCircle, XCircle, Filter } from 'lucide-react'
+import { AlertTriangle, Calendar, Package, Clock, CheckCircle, XCircle, Eye, RotateCcw, Trash2, X, AlertCircle } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -12,6 +12,21 @@ const StockExpiry = () => {
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('all')
   const [sortBy, setSortBy] = useState('daysUntilExpiry')
+
+  // Modals state
+  const [selectedProduct, setSelectedProduct] = useState(null)
+  
+  const [returnModalItem, setReturnModalItem] = useState(null)
+  const [returnQty, setReturnQty] = useState(1)
+  const [returnReason, setReturnReason] = useState('Near Expiry / Expired')
+  const [returnNotes, setReturnNotes] = useState('')
+  const [returnSubmitting, setReturnSubmitting] = useState(false)
+
+  const [disposeModalItem, setDisposeModalItem] = useState(null)
+  const [disposeQty, setDisposeQty] = useState(1)
+  const [disposeReason, setDisposeReason] = useState('Expired Stock')
+  const [disposeNotes, setDisposeNotes] = useState('')
+  const [disposeSubmitting, setDisposeSubmitting] = useState(false)
 
   useEffect(() => {
     fetchExpiryData()
@@ -235,14 +250,36 @@ const StockExpiry = () => {
               </div>
             </div>
 
-            <div className="flex space-x-2">
-              <button className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100">
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+              <button
+                onClick={() => setSelectedProduct(item)}
+                className="inline-flex items-center px-3.5 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors shadow-sm"
+              >
+                <Eye className="h-4 w-4 mr-1.5" />
                 {t('viewDetails')}
               </button>
-              <button className="px-4 py-2 text-sm font-medium text-orange-600 bg-orange-50 rounded-md hover:bg-orange-100">
+              <button
+                onClick={() => {
+                  setReturnModalItem(item)
+                  setReturnQty(Math.min(1, item.quantity))
+                  setReturnReason('Near Expiry / Expired')
+                  setReturnNotes('')
+                }}
+                className="inline-flex items-center px-3.5 py-1.5 text-sm font-medium text-orange-700 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors shadow-sm"
+              >
+                <RotateCcw className="h-4 w-4 mr-1.5" />
                 {t('returnToSupplier')}
               </button>
-              <button className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100">
+              <button
+                onClick={() => {
+                  setDisposeModalItem(item)
+                  setDisposeQty(Math.min(1, item.quantity))
+                  setDisposeReason('Expired Stock')
+                  setDisposeNotes('')
+                }}
+                className="inline-flex items-center px-3.5 py-1.5 text-sm font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors shadow-sm"
+              >
+                <Trash2 className="h-4 w-4 mr-1.5" />
                 {t('dispose')}
               </button>
             </div>
@@ -298,6 +335,364 @@ const StockExpiry = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal: View Details */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 overflow-hidden transform transition-all">
+            <div className="flex justify-between items-start pb-4 border-b border-gray-100">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-xl font-bold text-gray-900">{selectedProduct.productName}</h3>
+                  {getStatusBadge(selectedProduct.status)}
+                </div>
+                <p className="text-sm text-gray-500 mt-0.5">{selectedProduct.type || 'Agricultural Input'}</p>
+              </div>
+              <button
+                onClick={() => setSelectedProduct(null)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="py-5 space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl">
+                <div>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('batchLabel')}</span>
+                  <p className="font-semibold text-gray-900 mt-0.5">{selectedProduct.batchNumber || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('supplierLabel')}</span>
+                  <p className="font-semibold text-gray-900 mt-0.5">{selectedProduct.supplier || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('expiryLabel')}</span>
+                  <p className="font-semibold text-gray-900 mt-0.5">{selectedProduct.expiryDate || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Days Remaining</span>
+                  <p className={`font-semibold mt-0.5 ${selectedProduct.daysUntilExpiry <= 0 ? 'text-red-600' : selectedProduct.daysUntilExpiry <= 7 ? 'text-orange-600' : 'text-emerald-700'}`}>
+                    {selectedProduct.daysUntilExpiry <= 0 ? 'Expired' : `${selectedProduct.daysUntilExpiry} days left`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 border border-gray-100 p-3.5 rounded-xl text-center">
+                <div className="bg-blue-50/50 p-2.5 rounded-lg">
+                  <span className="text-xs text-blue-700 font-medium">In Stock</span>
+                  <p className="text-lg font-bold text-blue-900 mt-0.5">{selectedProduct.quantity}</p>
+                </div>
+                <div className="bg-amber-50/50 p-2.5 rounded-lg">
+                  <span className="text-xs text-amber-700 font-medium">Unit Cost</span>
+                  <p className="text-lg font-bold text-amber-900 mt-0.5">₹{(parseFloat(selectedProduct.cost) || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-emerald-50/50 p-2.5 rounded-lg">
+                  <span className="text-xs text-emerald-700 font-medium">Total Value</span>
+                  <p className="text-lg font-bold text-emerald-900 mt-0.5">₹{(parseFloat(selectedProduct.totalValue) || 0).toLocaleString()}</p>
+                </div>
+              </div>
+
+              {selectedProduct.description && (
+                <div>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Description</span>
+                  <p className="text-gray-700 mt-1 text-xs leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    {selectedProduct.description}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setSelectedProduct(null)}
+                className="px-5 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Return to Supplier */}
+      {returnModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 overflow-hidden transform transition-all">
+            <div className="flex justify-between items-start pb-4 border-b border-gray-100">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-orange-50 rounded-xl text-orange-600">
+                  <RotateCcw className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">{t('returnToSupplier')}</h3>
+                  <p className="text-xs text-gray-500">{returnModalItem.productName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setReturnModalItem(null)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const qtyNum = parseInt(returnQty, 10)
+                if (isNaN(qtyNum) || qtyNum <= 0) {
+                  toast.error('Please enter a valid quantity greater than 0')
+                  return
+                }
+                if (qtyNum > returnModalItem.quantity) {
+                  toast.error(`Cannot return more than available stock (${returnModalItem.quantity})`)
+                  return
+                }
+                setReturnSubmitting(true)
+                try {
+                  const res = await api.post('/inventory/return-to-supplier', {
+                    productId: returnModalItem.id,
+                    quantity: qtyNum,
+                    reason: returnReason,
+                    notes: returnNotes
+                  })
+                  toast.success(res.data.message || 'Stock returned to supplier successfully!')
+                  setReturnModalItem(null)
+                  fetchExpiryData()
+                } catch (err) {
+                  console.error('Error returning stock:', err)
+                  toast.error(err.response?.data?.error || 'Failed to process return')
+                } finally {
+                  setReturnSubmitting(false)
+                }
+              }}
+              className="py-4 space-y-4 text-sm"
+            >
+              <div className="bg-orange-50/60 p-3 rounded-xl border border-orange-100 text-xs text-orange-800 space-y-1">
+                <div className="flex justify-between">
+                  <span className="font-medium">Target Supplier:</span>
+                  <span className="font-bold">{returnModalItem.supplier || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Available in Stock:</span>
+                  <span className="font-bold">{returnModalItem.quantity} units</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Unit Cost:</span>
+                  <span className="font-bold">₹{(parseFloat(returnModalItem.cost) || 0).toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Quantity to Return (Max: {returnModalItem.quantity}) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={returnModalItem.quantity}
+                  value={returnQty}
+                  onChange={(e) => setReturnQty(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm font-medium"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Estimated credit value: <span className="font-semibold text-gray-800">₹{((parseFloat(returnModalItem.cost) || 0) * (parseInt(returnQty) || 0)).toLocaleString()}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Return Reason *
+                </label>
+                <select
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                >
+                  <option value="Near Expiry / Expired">Near Expiry / Expired</option>
+                  <option value="Damaged Packaging">Damaged Packaging</option>
+                  <option value="Quality Concern">Quality Concern</option>
+                  <option value="Overstocked Batch">Overstocked Batch</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Remarks / Tracking Note (Optional)
+                </label>
+                <textarea
+                  rows="2"
+                  value={returnNotes}
+                  onChange={(e) => setReturnNotes(e.target.value)}
+                  placeholder="e.g., Return courier airway bill or supplier confirmation ref"
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setReturnModalItem(null)}
+                  disabled={returnSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={returnSubmitting}
+                  className="inline-flex items-center px-5 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-lg transition-colors shadow-sm disabled:opacity-60"
+                >
+                  {returnSubmitting ? 'Processing...' : 'Confirm Return'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Dispose Stock */}
+      {disposeModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 overflow-hidden transform transition-all">
+            <div className="flex justify-between items-start pb-4 border-b border-gray-100">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-red-50 rounded-xl text-red-600">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">{t('dispose')} Stock</h3>
+                  <p className="text-xs text-gray-500">{disposeModalItem.productName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDisposeModalItem(null)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const qtyNum = parseInt(disposeQty, 10)
+                if (isNaN(qtyNum) || qtyNum <= 0) {
+                  toast.error('Please enter a valid quantity greater than 0')
+                  return
+                }
+                if (qtyNum > disposeModalItem.quantity) {
+                  toast.error(`Cannot dispose more than available stock (${disposeModalItem.quantity})`)
+                  return
+                }
+                setDisposeSubmitting(true)
+                try {
+                  const res = await api.post('/inventory/dispose', {
+                    productId: disposeModalItem.id,
+                    quantity: qtyNum,
+                    reason: disposeReason,
+                    notes: disposeNotes
+                  })
+                  toast.success(res.data.message || 'Stock disposed successfully!')
+                  setDisposeModalItem(null)
+                  fetchExpiryData()
+                } catch (err) {
+                  console.error('Error disposing stock:', err)
+                  toast.error(err.response?.data?.error || 'Failed to process disposal')
+                } finally {
+                  setDisposeSubmitting(false)
+                }
+              }}
+              className="py-4 space-y-4 text-sm"
+            >
+              <div className="bg-red-50/60 p-3 rounded-xl border border-red-100 text-xs text-red-800 space-y-1">
+                <div className="flex items-center text-red-700 font-semibold mb-1">
+                  <AlertCircle className="h-4 w-4 mr-1 text-red-600 inline" />
+                  Warning: Disposing stock writes off inventory.
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Current Stock:</span>
+                  <span className="font-bold">{disposeModalItem.quantity} units</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Expiry Date:</span>
+                  <span className="font-bold">{disposeModalItem.expiryDate || 'N/A'}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Quantity to Dispose (Max: {disposeModalItem.quantity}) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={disposeModalItem.quantity}
+                  value={disposeQty}
+                  onChange={(e) => setDisposeQty(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm font-medium"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Inventory write-off loss: <span className="font-semibold text-red-600">₹{((parseFloat(disposeModalItem.cost) || 0) * (parseInt(disposeQty) || 0)).toLocaleString()}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Disposal Reason *
+                </label>
+                <select
+                  value={disposeReason}
+                  onChange={(e) => setDisposeReason(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
+                >
+                  <option value="Expired Stock">Expired Stock (Safe Chemical Destruction)</option>
+                  <option value="Contaminated / Compromised">Contaminated / Compromised</option>
+                  <option value="Damaged / Leaking Packaging">Damaged / Leaking Packaging</option>
+                  <option value="Regulatory Ban / Recall">Regulatory Ban / Recall</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Disposal Certificate / Waste Handling Note (Optional)
+                </label>
+                <textarea
+                  rows="2"
+                  value={disposeNotes}
+                  onChange={(e) => setDisposeNotes(e.target.value)}
+                  placeholder="e.g., Authorized hazardous waste disposal vendor receipt number"
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setDisposeModalItem(null)}
+                  disabled={disposeSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={disposeSubmitting}
+                  className="inline-flex items-center px-5 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-sm disabled:opacity-60"
+                >
+                  {disposeSubmitting ? 'Disposing...' : 'Confirm Disposal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

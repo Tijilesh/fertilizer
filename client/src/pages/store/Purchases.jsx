@@ -22,6 +22,8 @@ const Purchases = () => {
   const [promptDefault, setPromptDefault] = useState('')
   const [promptHandler, setPromptHandler] = useState(() => {})
 
+  const [editingSupplier, setEditingSupplier] = useState(null)
+
   useEffect(() => {
     fetchData()
   }, [])
@@ -32,6 +34,7 @@ const Purchases = () => {
       await api.post('/suppliers', newSupplier)
       toast.success(t('supplierAddedSuccess') || 'Supplier added successfully')
       setShowAddSupplier(false)
+      setNewSupplier({ name: '', contact_person: '', phone: '', email: '', address: '', credit_limit: 0, current_balance: 0 })
       fetchData()
     } catch (error) {
       toast.error(t('failedToAddSupplier') || 'Failed to add supplier')
@@ -50,21 +53,25 @@ const Purchases = () => {
     }
   }
 
-  const handleEditSupplier = async (supplier) => {
-    setPromptDefault(supplier.name)
-    setPromptHandler(() => async (val) => {
-      if (!val) return
-      try {
-        await api.put(`/suppliers/${supplier.id}`, { ...supplier, name: val })
-        toast.success('Supplier updated successfully')
-        fetchData()
-      } catch (error) {
-        toast.error(error.response?.data?.error || 'Failed to update supplier')
-      } finally {
-        setPromptOpen(false)
-      }
+  const handleEditSupplier = (supplier) => {
+    setEditingSupplier({
+      ...supplier,
+      credit_limit: supplier.credit_limit ?? 0,
+      current_balance: supplier.current_balance ?? 0
     })
-    setPromptOpen(true)
+  }
+
+  const handleSaveSupplierEdit = async (e) => {
+    e.preventDefault()
+    if (!editingSupplier) return
+    try {
+      await api.put(`/suppliers/${editingSupplier.id}`, editingSupplier)
+      toast.success('Supplier updated successfully')
+      setEditingSupplier(null)
+      fetchData()
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to update supplier')
+    }
   }
 
   const handleDeleteSupplier = async (supplier) => {
@@ -348,55 +355,186 @@ const Purchases = () => {
       )}
 
       {showAddSupplier && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">{t('addSupplier') || 'Add New Supplier'}</h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-lg border">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">{t('addSupplier') || 'Add New Supplier'}</h2>
             <form onSubmit={handleAddSupplier} className="space-y-4">
-              <input
-                type="text"
-                placeholder={t('supplierName') || 'Supplier Name'}
-                className="w-full p-2 border rounded"
-                value={newSupplier.name}
-                onChange={e => setNewSupplier({ ...newSupplier, name: e.target.value })}
-                required
-              />
-              <input
-                type="text"
-                placeholder={t('contactPerson') || 'Contact Person'}
-                className="w-full p-2 border rounded"
-                value={newSupplier.contact_person}
-                onChange={e => setNewSupplier({ ...newSupplier, contact_person: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder={t('phone') || 'Phone'}
-                className="w-full p-2 border rounded"
-                value={newSupplier.phone}
-                onChange={e => setNewSupplier({ ...newSupplier, phone: e.target.value })}
-              />
-              <input
-                type="email"
-                placeholder={t('email') || 'Email'}
-                className="w-full p-2 border rounded"
-                value={newSupplier.email}
-                onChange={e => setNewSupplier({ ...newSupplier, email: e.target.value })}
-              />
-              <textarea
-                placeholder={t('address') || 'Address'}
-                className="w-full p-2 border rounded"
-                value={newSupplier.address}
-                onChange={e => setNewSupplier({ ...newSupplier, address: e.target.value })}
-              ></textarea>
-              <input
-                type="number"
-                placeholder={t('creditLimit') || 'Credit Limit'}
-                className="w-full p-2 border rounded"
-                value={newSupplier.credit_limit}
-                onChange={e => setNewSupplier({ ...newSupplier, credit_limit: e.target.value })}
-              />
-              <div className="flex justify-end space-x-2">
-                <button type="button" onClick={() => setShowAddSupplier(false)} className="px-4 py-2 text-gray-600">{t('cancel')}</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">{t('save')}</button>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t('supplierName') || 'Supplier Name'} *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. IFFCO, Coromandel"
+                  className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  value={newSupplier.name}
+                  onChange={e => setNewSupplier({ ...newSupplier, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{t('contactPerson') || 'Contact Person'}</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Rajesh Sharma"
+                    className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    value={newSupplier.contact_person}
+                    onChange={e => setNewSupplier({ ...newSupplier, contact_person: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{t('phone') || 'Phone'}</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 9876543210"
+                    className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    value={newSupplier.phone}
+                    onChange={e => setNewSupplier({ ...newSupplier, phone: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t('email') || 'Email'}</label>
+                <input
+                  type="email"
+                  placeholder="e.g. supplier@example.com"
+                  className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  value={newSupplier.email}
+                  onChange={e => setNewSupplier({ ...newSupplier, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t('address') || 'Address'}</label>
+                <textarea
+                  placeholder="e.g. Industrial Area, Plot 42"
+                  rows="2"
+                  className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  value={newSupplier.address}
+                  onChange={e => setNewSupplier({ ...newSupplier, address: e.target.value })}
+                ></textarea>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{t('creditLimit') || 'Credit Limit (₹)'}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0"
+                    className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    value={newSupplier.credit_limit}
+                    onChange={e => setNewSupplier({ ...newSupplier, credit_limit: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{t('currentBalanceLabel') || 'Credit / Outstanding Balance (₹)'}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0"
+                    className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    value={newSupplier.current_balance || ''}
+                    onChange={e => setNewSupplier({ ...newSupplier, current_balance: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 pt-2">
+                <button type="button" onClick={() => setShowAddSupplier(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium">{t('cancel')}</button>
+                <button type="submit" className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow">{t('save')}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Supplier Modal */}
+      {editingSupplier && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-lg border">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Edit Supplier Details</h2>
+            <form onSubmit={handleSaveSupplierEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t('supplierName') || 'Supplier Name'} *</label>
+                <input
+                  type="text"
+                  className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  value={editingSupplier.name || ''}
+                  onChange={e => setEditingSupplier({ ...editingSupplier, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{t('contactPerson') || 'Contact Person'}</label>
+                  <input
+                    type="text"
+                    className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    value={editingSupplier.contact_person || ''}
+                    onChange={e => setEditingSupplier({ ...editingSupplier, contact_person: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{t('phone') || 'Phone'}</label>
+                  <input
+                    type="text"
+                    className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    value={editingSupplier.phone || ''}
+                    onChange={e => setEditingSupplier({ ...editingSupplier, phone: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t('email') || 'Email'}</label>
+                <input
+                  type="email"
+                  className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  value={editingSupplier.email || ''}
+                  onChange={e => setEditingSupplier({ ...editingSupplier, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t('address') || 'Address'}</label>
+                <textarea
+                  rows="2"
+                  className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  value={editingSupplier.address || ''}
+                  onChange={e => setEditingSupplier({ ...editingSupplier, address: e.target.value })}
+                ></textarea>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{t('creditLimit') || 'Credit Limit (₹)'}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    value={editingSupplier.credit_limit}
+                    onChange={e => setEditingSupplier({ ...editingSupplier, credit_limit: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{t('currentBalanceLabel') || 'Credit / Outstanding Balance (₹)'}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    value={editingSupplier.current_balance}
+                    onChange={e => setEditingSupplier({ ...editingSupplier, current_balance: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{t('statusLabel') || 'Status'}</label>
+                <select
+                  className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  value={editingSupplier.status || 'active'}
+                  onChange={e => setEditingSupplier({ ...editingSupplier, status: e.target.value })}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <div className="flex justify-end space-x-3 pt-2">
+                <button type="button" onClick={() => setEditingSupplier(null)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium">{t('cancel')}</button>
+                <button type="submit" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow">{t('save')}</button>
               </div>
             </form>
           </div>

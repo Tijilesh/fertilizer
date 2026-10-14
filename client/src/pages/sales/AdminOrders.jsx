@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Search, Package, Truck, CheckCircle, Clock, Eye, ShoppingBag } from 'lucide-react'
+import { Search, Package, Truck, CheckCircle, Clock, ShoppingBag } from 'lucide-react'
 import api from '../../utils/api'
-import { useLanguage } from '../../contexts/LanguageContext'
 import toast from 'react-hot-toast'
-import PromptModal from '../../components/common/PromptModal'
 
 const AdminOrders = () => {
-  const { t } = useLanguage()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')

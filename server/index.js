@@ -98,6 +98,10 @@ async function connectDatabase() {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
+      maxIdle: 10,
+      idleTimeout: 60000
     });
 
     console.log('Connected to MySQL database.');
@@ -486,11 +490,55 @@ async function initializeDatabase() {
     console.error('Products dedupe error:', e.message);
   }
 
-  // Ensure unique constraint on products.name even if table existed earlier
+  // Ensure unique constraint on products is per-shop (shop_id, name)
   try {
-    await db.execute('ALTER TABLE products ADD UNIQUE KEY uniq_products_name (name)');
+    const [pIndexes] = await db.query('SHOW INDEX FROM products');
+    if (pIndexes.some(i => i.Key_name === 'uniq_products_name')) {
+      await db.query('ALTER TABLE products DROP INDEX uniq_products_name');
+    }
+    if (!pIndexes.some(i => i.Key_name === 'uniq_shop_product_name')) {
+      await db.query('ALTER TABLE products ADD UNIQUE KEY uniq_shop_product_name (shop_id, name)');
+    }
   } catch (e) {
-    // ignore if already exists
+    // ignore
+  }
+
+  // Ensure unique constraint on farmers is per-shop (shop_id, phone)
+  try {
+    const [fIndexes] = await db.query('SHOW INDEX FROM farmers');
+    if (fIndexes.some(i => i.Key_name === 'phone')) {
+      await db.query('ALTER TABLE farmers DROP INDEX phone');
+    }
+    if (!fIndexes.some(i => i.Key_name === 'uniq_shop_farmer_phone')) {
+      await db.query('ALTER TABLE farmers ADD UNIQUE KEY uniq_shop_farmer_phone (shop_id, phone)');
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Ensure unique constraint on suppliers is per-shop (shop_id, name)
+  try {
+    const [sIndexes] = await db.query('SHOW INDEX FROM suppliers');
+    if (sIndexes.some(i => i.Key_name === 'name')) {
+      await db.query('ALTER TABLE suppliers DROP INDEX name');
+    }
+    if (!sIndexes.some(i => i.Key_name === 'uniq_shop_supplier_name')) {
+      await db.query('ALTER TABLE suppliers ADD UNIQUE KEY uniq_shop_supplier_name (shop_id, name)');
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Backfill suppliers from products table for any shops that don't have them yet
+  try {
+    await db.execute(`
+      INSERT IGNORE INTO suppliers (name, shop_id, status)
+      SELECT DISTINCT TRIM(supplier), COALESCE(shop_id, 1), 'active'
+      FROM products
+      WHERE supplier IS NOT NULL AND TRIM(supplier) != ''
+    `);
+  } catch (e) {
+    console.error('Suppliers backfill error:', e.message);
   }
 
   // Cleanup compatibility rules from older seeds (orphaned + duplicates)
@@ -548,6 +596,15 @@ async function seedDemoData() {
 
   const [[{ count: productCount }]] = await db.execute('SELECT COUNT(*) as count FROM products');
   console.log(`Ensured demo products from JSON. Total products: ${productCount}`);
+
+  // Seed suppliers from demo products
+  const demoSuppliers = [...new Set(demoProducts.map(p => p.supplier).filter(Boolean))];
+  for (const supName of demoSuppliers) {
+    await db.execute(
+      `INSERT IGNORE INTO suppliers (name, shop_id, status) VALUES (?, 1, 'active')`,
+      [supName]
+    );
+  }
 
   // Seed demo sales
   const [[{ count: salesCount }]] = await db.execute('SELECT COUNT(*) as count FROM sales');
@@ -1015,7 +1072,7 @@ app.get('/api/accounting/summary', verifyToken, async (req, res) => {
 app.get('/api/inventory/expiry', verifyToken, async (req, res) => {
   try {
     const [rows] = await db.execute(`
-      SELECT id, name as productName, batch_number as batchNumber, quantity, 
+      SELECT id, name as productName, type, description, batch_number as batchNumber, quantity, 
              DATE_FORMAT(expiry_date, '%Y-%m-%d') as expiryDate,
              DATEDIFF(expiry_date, NOW()) as daysUntilExpiry,
              supplier, price as cost, (price * quantity) as totalValue,
@@ -1035,6 +1092,113 @@ app.get('/api/inventory/expiry', verifyToken, async (req, res) => {
   }
 });
 
+// Return to supplier
+app.post('/api/inventory/return-to-supplier', verifyToken, async (req, res) => {
+  const { productId, quantity, reason, notes } = req.body;
+  const returnQty = parseInt(quantity, 10);
+
+  if (!productId || isNaN(returnQty) || returnQty <= 0) {
+    return res.status(400).json({ error: 'Valid product ID and return quantity (> 0) are required.' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+
+  try {
+    const [products] = await db.execute('SELECT * FROM products WHERE id = ? AND shop_id = ?', [productId, shopId]);
+    if (products.length === 0) {
+      return res.status(404).json({ error: 'Product not found.' });
+    }
+
+    const product = products[0];
+    if (product.quantity < returnQty) {
+      return res.status(400).json({ error: `Cannot return ${returnQty} units. Only ${product.quantity} units available in stock.` });
+    }
+
+    // Deduct quantity from products
+    await db.execute('UPDATE products SET quantity = quantity - ? WHERE id = ? AND shop_id = ?', [returnQty, productId, shopId]);
+
+    // If supplier exists, optionally adjust current_balance if return value credits back
+    const returnValue = (parseFloat(product.price) || 0) * returnQty;
+    if (product.supplier) {
+      try {
+        await db.execute(
+          'UPDATE suppliers SET current_balance = GREATEST(0, current_balance - ?) WHERE name = ? AND shop_id = ?',
+          [returnValue, product.supplier, shopId]
+        );
+      } catch (suppErr) {
+        console.warn('Could not auto-adjust supplier credit on return:', suppErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully returned ${returnQty} units of "${product.name}" to supplier ${product.supplier || 'N/A'}.`,
+      returnedQuantity: returnQty,
+      remainingQuantity: product.quantity - returnQty,
+      returnValue
+    });
+  } catch (err) {
+    console.error('Error returning to supplier:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dispose expired or damaged stock
+app.post('/api/inventory/dispose', verifyToken, async (req, res) => {
+  const { productId, quantity, reason, notes } = req.body;
+  const disposeQty = parseInt(quantity, 10);
+
+  if (!productId || isNaN(disposeQty) || disposeQty <= 0) {
+    return res.status(400).json({ error: 'Valid product ID and disposal quantity (> 0) are required.' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+
+  try {
+    const [products] = await db.execute('SELECT * FROM products WHERE id = ? AND shop_id = ?', [productId, shopId]);
+    if (products.length === 0) {
+      return res.status(404).json({ error: 'Product not found.' });
+    }
+
+    const product = products[0];
+    if (product.quantity < disposeQty) {
+      return res.status(400).json({ error: `Cannot dispose ${disposeQty} units. Only ${product.quantity} units available in stock.` });
+    }
+
+    // Deduct quantity from products
+    await db.execute('UPDATE products SET quantity = quantity - ? WHERE id = ? AND shop_id = ?', [disposeQty, productId, shopId]);
+
+    const lossValue = (parseFloat(product.price) || 0) * disposeQty;
+
+    res.json({
+      success: true,
+      message: `Successfully disposed ${disposeQty} units of "${product.name}".`,
+      disposedQuantity: disposeQty,
+      remainingQuantity: product.quantity - disposeQty,
+      lossValue
+    });
+  } catch (err) {
+    console.error('Error disposing product:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// Helper to ensure a supplier exists for the given shop
+async function ensureSupplierExists(supplierName, shopId = 1, executor = db) {
+  if (!supplierName || typeof supplierName !== 'string') return null;
+  const trimmed = supplierName.trim();
+  if (!trimmed) return null;
+  try {
+    await executor.execute(
+      `INSERT IGNORE INTO suppliers (name, shop_id, status) VALUES (?, ?, 'active')`,
+      [trimmed, shopId]
+    );
+  } catch (err) {
+    console.error('ensureSupplierExists error:', err.message);
+  }
+}
+
 // Suppliers Endpoints
 app.get('/api/suppliers', verifyToken, async (req, res) => {
   try {
@@ -1046,21 +1210,23 @@ app.get('/api/suppliers', verifyToken, async (req, res) => {
 });
 
 app.post('/api/suppliers', verifyToken, async (req, res) => {
-  const { name, contact_person, phone, email, address, credit_limit } = req.body;
+  const { name, contact_person, phone, email, address, credit_limit, current_balance, status } = req.body;
   try {
     const [result] = await db.execute(
-      'INSERT INTO suppliers (name, contact_person, phone, email, address, credit_limit, shop_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO suppliers (name, contact_person, phone, email, address, credit_limit, current_balance, status, shop_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         name,
         contact_person !== undefined ? contact_person : null,
         phone !== undefined ? phone : null,
         email !== undefined ? email : null,
         address !== undefined ? address : null,
-        credit_limit !== undefined ? credit_limit : 0,
+        credit_limit !== undefined ? parseFloat(credit_limit) || 0 : 0,
+        current_balance !== undefined ? parseFloat(current_balance) || 0 : 0,
+        status || 'active',
         req.user.shop_id || 1
       ]
     );
-    res.status(201).json({ id: result.insertId, name, contact_person, phone, email, address, credit_limit });
+    res.status(201).json({ id: result.insertId, name, contact_person, phone, email, address, credit_limit, current_balance });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1068,11 +1234,11 @@ app.post('/api/suppliers', verifyToken, async (req, res) => {
 
 app.put('/api/suppliers/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { name, contact_person, phone, email, address, credit_limit, status } = req.body;
+  const { name, contact_person, phone, email, address, credit_limit, current_balance, status } = req.body;
   try {
     const [result] = await db.execute(
       `UPDATE suppliers
-       SET name = ?, contact_person = ?, phone = ?, email = ?, address = ?, credit_limit = ?, status = ?
+       SET name = ?, contact_person = ?, phone = ?, email = ?, address = ?, credit_limit = ?, current_balance = ?, status = ?
        WHERE id = ? AND shop_id = ?`,
       [
         name,
@@ -1080,7 +1246,8 @@ app.put('/api/suppliers/:id', verifyToken, async (req, res) => {
         phone !== undefined ? phone : null,
         email !== undefined ? email : null,
         address !== undefined ? address : null,
-        credit_limit !== undefined ? credit_limit : 0,
+        credit_limit !== undefined ? parseFloat(credit_limit) || 0 : 0,
+        current_balance !== undefined ? parseFloat(current_balance) || 0 : 0,
         status || 'active',
         id,
         req.user.shop_id || 1
@@ -1449,6 +1616,22 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Public: Featured products for landing page
+app.get('/api/products/featured', async (req, res) => {
+  try {
+    const [rows] = await db.execute(`
+      SELECT id, name, type, price, quantity, description, supplier
+      FROM products
+      WHERE quantity > 0
+      ORDER BY quantity DESC, price DESC
+      LIMIT 6
+    `);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get all products
 app.get('/api/products', verifyToken, async (req, res) => {
   try {
@@ -1479,6 +1662,7 @@ app.post('/api/products', verifyToken, async (req, res) => {
   }
 
   try {
+    const shopId = req.user.shop_id || 1;
     const [result] = await db.execute(
       'INSERT INTO products (name, type, price, quantity, supplier, description, batch_number, expiry_date, shop_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
@@ -1490,9 +1674,15 @@ app.post('/api/products', verifyToken, async (req, res) => {
         description !== undefined ? description : null,
         batch_number !== undefined ? batch_number : null,
         expiry_date !== undefined ? expiry_date : null,
-        req.user.shop_id || 1
+        shopId
       ]
     );
+
+    // Auto-create supplier if specified
+    if (supplier) {
+      await ensureSupplierExists(supplier, shopId);
+    }
+
     res.json({ id: result.insertId, message: 'Product added successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1511,12 +1701,14 @@ app.post('/api/products/bulk', verifyToken, async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    const shopId = req.user.shop_id || 1;
     let importedCount = 0;
     for (const prod of products) {
       if (!prod.name || !prod.price) continue; // Basic validation
       
       const type = prod.type || 'Other';
       const quantity = parseInt(prod.quantity) || 0;
+      const supplierName = prod.supplier ? String(prod.supplier).trim() : null;
       
       await connection.execute(
         'INSERT INTO products (name, type, price, quantity, supplier, description, batch_number, expiry_date, shop_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1525,13 +1717,19 @@ app.post('/api/products/bulk', verifyToken, async (req, res) => {
           type,
           prod.price,
           quantity,
-          prod.supplier || null,
+          supplierName || null,
           prod.description || null,
           prod.batch_number || null,
           prod.expiry_date || null,
-          req.user.shop_id || 1
+          shopId
         ]
       );
+
+      // Auto-create supplier directly so they appear in Purchase Management
+      if (supplierName) {
+        await ensureSupplierExists(supplierName, shopId, connection);
+      }
+
       importedCount++;
     }
 
@@ -1550,6 +1748,7 @@ app.put('/api/products/:id', verifyToken, async (req, res) => {
   const { name, type, price, quantity, supplier, description, batch_number, expiry_date } = req.body;
 
   try {
+    const shopId = req.user.shop_id || 1;
     const [result] = await db.execute(
       'UPDATE products SET name = ?, type = ?, price = ?, quantity = ?, supplier = ?, description = ?, batch_number = ?, expiry_date = ? WHERE id = ? AND shop_id = ?',
       [
@@ -1562,10 +1761,16 @@ app.put('/api/products/:id', verifyToken, async (req, res) => {
         batch_number !== undefined ? batch_number : null,
         expiry_date !== undefined ? expiry_date : null,
         req.params.id,
-        req.user.shop_id || 1
+        shopId
       ]
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Product not found' });
+
+    // Auto-create supplier if updated to a new supplier
+    if (supplier) {
+      await ensureSupplierExists(supplier, shopId);
+    }
+
     res.json({ message: 'Product updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1614,7 +1819,7 @@ app.get('/api/sales/:id', verifyToken, async (req, res) => {
     if (!sale) return res.status(404).json({ error: 'Sale not found or unauthorized' });
 
     const [items] = await db.execute(`
-      SELECT si.*, p.name, p.type
+      SELECT si.*, p.name, p.type, p.batch_number
       FROM sale_items si
       JOIN products p ON si.product_id = p.id
       WHERE si.sale_id = ?
@@ -1668,6 +1873,18 @@ app.post('/api/sales', verifyToken, async (req, res) => {
         }
       }
 
+      // 2b. If still not found and phone is provided, check if farmer exists globally
+      if (!saleFarmerId && customer_phone) {
+        const [[globalExisting]] = await connection.execute(
+          'SELECT id, name FROM farmers WHERE phone = ? LIMIT 1',
+          [customer_phone]
+        );
+        if (globalExisting) {
+          saleFarmerId = globalExisting.id;
+          if (!finalCustomerName) finalCustomerName = globalExisting.name;
+        }
+      }
+
       // 3. If still not found, auto-create a new farmer record
       if (!saleFarmerId && finalCustomerName) {
         const [insertRes] = await connection.execute(
@@ -1710,7 +1927,8 @@ app.post('/api/sales', verifyToken, async (req, res) => {
         customer_phone !== undefined ? customer_phone : null,
         total_amount,
         isCredit ? 'Credit' : (payment_method || 'Cash'),
-        req.user.shop_id || 1
+        req.user.shop_id || 1,
+        'walk-in'
       ]
     );
     const saleId = saleResult.insertId;
@@ -1982,14 +2200,14 @@ app.get('/api/farmers/:id', verifyToken, async (req, res) => {
     const [[farmer]] = await db.execute('SELECT * FROM farmers WHERE id = ? AND shop_id = ?', [req.params.id, req.user.shop_id || 1]);
     if (!farmer) return res.status(404).json({ error: 'Farmer not found or unauthorized' });
     
-    // Get farmer's sales history only when the relation exists
+    // Get farmer's in-store/walk-in sales history only (exclude online orders which are displayed separately)
     const [sales] = salesHasFarmerId
       ? await db.execute(`
           SELECT s.*, GROUP_CONCAT(CONCAT(p.name, ' (x', si.quantity, ')') SEPARATOR ', ') as items
           FROM sales s
           LEFT JOIN sale_items si ON s.id = si.sale_id
           LEFT JOIN products p ON si.product_id = p.id
-          WHERE s.farmer_id = ?
+          WHERE s.farmer_id = ? AND (s.sale_type IS NULL OR s.sale_type != 'online')
           GROUP BY s.id
           ORDER BY s.sale_date DESC
         `, [req.params.id])
@@ -2642,7 +2860,7 @@ app.get('/api/orders', verifyToken, async (req, res) => {
           FROM sales s
           LEFT JOIN sale_items si ON s.id = si.sale_id
           LEFT JOIN products p ON si.product_id = p.id
-          WHERE s.farmer_id = ? AND s.shop_id = ?
+          WHERE s.farmer_id = ? AND s.shop_id = ? AND (s.sale_type IS NULL OR s.sale_type != 'online')
           GROUP BY s.id
         `, [farmerId, req.user.shop_id || 1]);
 
@@ -2683,7 +2901,7 @@ app.get('/api/orders/:id', verifyToken, async (req, res) => {
     if (farmerId) {
       const salesHasFarmerId = await columnExists('sales', 'farmer_id');
       if (salesHasFarmerId) {
-        const [[sale]] = await db.execute('SELECT *, sale_date as created_at, "delivered" as status, "paid" as payment_status FROM sales WHERE id = ? AND farmer_id = ? AND shop_id = ?', [orderId, farmerId, req.user.shop_id || 1]);
+        const [[sale]] = await db.execute('SELECT *, sale_date as created_at, "delivered" as status, "paid" as payment_status FROM sales WHERE id = ? AND farmer_id = ? AND shop_id = ? AND (sale_type IS NULL OR sale_type != "online")', [orderId, farmerId, req.user.shop_id || 1]);
         
         if (sale) {
           const [saleItems] = await db.execute(`
@@ -2956,19 +3174,20 @@ app.get('/api/cart', verifyToken, async (req, res) => {
 
 // Add item to cart
 app.post('/api/cart', verifyToken, async (req, res) => {
-  const { product_id, quantity } = req.body;
+  const prodId = req.body.product_id || req.body.productId;
+  const quantity = parseInt(req.body.quantity, 10);
   const userId = req.user.id;
 
-  if (!product_id || !quantity || quantity <= 0) {
-    return res.status(400).json({ error: 'Product ID and valid quantity are required' });
+  if (!prodId || isNaN(quantity) || quantity <= 0) {
+    return res.status(400).json({ error: 'Product ID and valid quantity (> 0) are required' });
   }
 
   try {
-    const [[product]] = await db.execute('SELECT quantity FROM products WHERE id = ?', [product_id]);
+    const [[product]] = await db.execute('SELECT quantity FROM products WHERE id = ?', [prodId]);
     if (!product) return res.status(404).json({ error: 'Product not found' });
     if (product.quantity < quantity) return res.status(400).json({ error: 'Insufficient product quantity' });
 
-    const [[existing]] = await db.execute('SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ?', [userId, product_id]);
+    const [[existing]] = await db.execute('SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ?', [userId, prodId]);
 
     if (existing) {
       const newQuantity = existing.quantity + quantity;
@@ -2978,7 +3197,7 @@ app.post('/api/cart', verifyToken, async (req, res) => {
     } else {
       const [result] = await db.execute('INSERT INTO cart_items (user_id, product_id, quantity) VALUES (?, ?, ?)', [
         userId,
-        product_id,
+        prodId,
         quantity !== undefined ? quantity : 1
       ]);
       res.json({ id: result.insertId, message: 'Item added to cart successfully' });

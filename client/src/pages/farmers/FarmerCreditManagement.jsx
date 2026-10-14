@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, Calendar, FileText, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { DollarSign, TrendingUp, Calendar, FileText, AlertTriangle, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { WhatsAppReminderModal } from '../../components/common';
 
 const FarmerCreditManagement = ({ farmer, onUpdate }) => {
   const [history, setHistory] = useState([]);
@@ -12,6 +13,7 @@ const FarmerCreditManagement = ({ farmer, onUpdate }) => {
   const [showInterestModal, setShowInterestModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showWaiveModal, setShowWaiveModal] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
 
   // Form states
   const [interestRate, setInterestRate] = useState(farmer?.interest_rate || 0);
@@ -99,6 +101,14 @@ const FarmerCreditManagement = ({ farmer, onUpdate }) => {
           <DollarSign className="mr-2 text-green-600 w-6 h-6" /> Credit Management
         </h2>
         <div className="space-x-2 flex flex-wrap gap-2 justify-end">
+          {totalPayable > 0 && (
+            <button
+              onClick={() => setShowWhatsAppModal(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition flex items-center gap-1.5"
+            >
+              <MessageSquare className="w-4 h-4" /> WhatsApp Reminder
+            </button>
+          )}
           <button onClick={() => setShowInterestModal(true)} className="btn-secondary px-4 py-2 rounded-lg text-sm">Edit Rate</button>
           <button onClick={() => setShowPaymentModal(true)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm shadow-sm transition">Record Payment</button>
           <button onClick={() => setShowWaiveModal(true)} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm shadow-sm transition">Waive Interest</button>
@@ -128,9 +138,20 @@ const FarmerCreditManagement = ({ farmer, onUpdate }) => {
           <p className="text-sm text-orange-600">Accrued Interest</p>
           <p className="text-xl font-bold text-orange-700 mt-1">₹{parseFloat(farmer.accrued_interest || 0).toFixed(2)}</p>
         </div>
-        <div className="p-4 bg-red-50 rounded-xl border border-red-100">
-          <p className="text-sm font-bold text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1"/> Total Payable</p>
-          <p className="text-2xl font-black text-red-700 mt-1">₹{totalPayable.toFixed(2)}</p>
+        <div className="p-4 bg-red-50 rounded-xl border border-red-100 flex justify-between items-center">
+          <div>
+            <p className="text-sm font-bold text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1"/> Total Payable</p>
+            <p className="text-2xl font-black text-red-700 mt-1">₹{totalPayable.toFixed(2)}</p>
+          </div>
+          {totalPayable > 0 && (
+            <button
+              onClick={() => setShowWhatsAppModal(true)}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm transition"
+              title="Send WhatsApp Reminder"
+            >
+              <MessageSquare className="w-3.5 h-3.5" /> Remind
+            </button>
+          )}
         </div>
       </div>
 
@@ -264,6 +285,14 @@ const FarmerCreditManagement = ({ farmer, onUpdate }) => {
           </div>
         </div>
       )}
+
+      {/* WhatsApp Reminder Modal */}
+      <WhatsAppReminderModal
+        isOpen={showWhatsAppModal}
+        onClose={() => setShowWhatsAppModal(false)}
+        farmer={farmer}
+        totalDue={totalPayable}
+      />
     </div>
   );
 };

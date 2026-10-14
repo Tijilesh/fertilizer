@@ -46,7 +46,7 @@ const CompatibilityChecker = () => {
     try {
       const response = await api.post('/compatibility/check', {
         productIds: selectedProducts.map(p => p.id),
-        cropId: selectedCrop
+        cropId: selectedCrop ? Number(selectedCrop) : undefined
       })
       setCompatibilityResult(response.data)
     } catch (error) {
