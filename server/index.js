@@ -1465,16 +1465,89 @@ app.delete('/api/payments/:id', verifyToken, async (req, res) => {
 });
 
 app.post('/api/smart-assistant/query', verifyToken, async (req, res) => {
-  const { message, farmData } = req.body;
-  // Simple rule-based response for simulation
-  let responseText = "As your Smart Assistant, I'm analyzing your request. ";
+  const { message = '', farmData = {} } = req.body;
+  const lowerMsg = message.toLowerCase();
+  const crop = farmData?.mainCrop || 'General Crop';
+  const farmSize = farmData?.farmSize || 5;
 
-  if (message.toLowerCase().includes('weather')) {
-    responseText += "The current weather is favorable, but keep an eye on humidity levels which are at 65%.";
-  } else if (message.toLowerCase().includes('fertilizer') || message.toLowerCase().includes('npk')) {
-    responseText += "Based on your loamy soil, I recommend a balanced NPK application. Ensure you don't over-apply before rain.";
-  } else {
-    responseText += "I see you're asking about " + message + ". For your farm size of " + (farmData?.farmSize || 'standard') + " acres, I suggest optimizing your nitrogen use efficiency.";
+  let responseText = '';
+
+  // 1. Weather Queries
+  if (lowerMsg.includes('weather') || lowerMsg.includes('rain') || lowerMsg.includes('temp') || lowerMsg.includes('forecast')) {
+    responseText = `🌤️ Weather Advisory: Currently, weather patterns indicate moderate conditions. If humidity exceeds 70% or rain is forecast, delay chemical foliar spraying and top-dressing urea by 24-48 hours to prevent wash-off into drainage channels.`;
+  }
+  // 2. Fertilizer & NPK Dosages
+  else if (lowerMsg.includes('fertilizer') || lowerMsg.includes('npk') || lowerMsg.includes('urea') || lowerMsg.includes('dap') || lowerMsg.includes('dosage')) {
+    if (lowerMsg.includes('rice') || crop.toLowerCase() === 'rice') {
+      responseText = `🌾 Rice / Paddy Fertilizer Recommendation:
+• Basal Dose: Apply DAP (50 kg/acre) + MOP (25 kg/acre) + Zinc Sulphate (10 kg/acre) during puddling.
+• 1st Top Dressing (20-25 DAT): Neem Coated Urea (30-35 kg/acre).
+• 2nd Top Dressing (Panicle Initiation): Urea (30 kg/acre) + MOP (15 kg/acre). Avoid mixing Zinc directly with DAP.`;
+    } else if (lowerMsg.includes('wheat') || crop.toLowerCase() === 'wheat') {
+      responseText = `🌾 Wheat Fertilizer Recommendation:
+• Basal: 55 kg DAP + 20 kg MOP per acre at sowing time.
+• 1st Irrigation (CRI Stage, 21 days): 45 kg Urea per acre.
+• 2nd Irrigation: 45 kg Urea per acre. Ensure proper soil moisture before top-dressing.`;
+    } else if (lowerMsg.includes('cotton') || crop.toLowerCase() === 'cotton') {
+      responseText = `🌱 Cotton Nutrient Schedule:
+• Total per acre: 60 kg N, 30 kg P, 30 kg K.
+• Apply all P & K basal, and split Nitrogen into 3 equal doses at 30, 60, and 90 days after sowing.`;
+    } else {
+      responseText = `🌱 General Fertilizer Advisory for ${crop} (${farmSize} acres):
+• Standard Split: Apply full Phosphorus (DAP/SSP) and Potash (MOP) as basal dose at sowing.
+• Split Nitrogen (Urea) into 2 to 3 doses to minimize leaching loss and maximize plant uptake.`;
+    }
+  }
+  // 3. Pest & Disease Diagnostics
+  else if (lowerMsg.includes('pest') || lowerMsg.includes('disease') || lowerMsg.includes('fungus') || lowerMsg.includes('yellow') || lowerMsg.includes('insect') || lowerMsg.includes('rot') || lowerMsg.includes('blast')) {
+    if (lowerMsg.includes('yellow') || lowerMsg.includes('leaf')) {
+      responseText = `🍃 Yellowing Leaves Diagnostic:
+• Lower older leaves yellowing: Nitrogen deficiency. Top-dress with Urea or spray 1% Urea solution.
+• Interveinal yellowing (green veins): Zinc or Magnesium deficiency. Foliar spray Chelated Zinc (1-2 g/L).
+• Tips burning/curling: Potassium deficiency or salt stress.`;
+    } else if (lowerMsg.includes('blast') || lowerMsg.includes('blight') || lowerMsg.includes('fung')) {
+      responseText = `🛡️ Fungal Blight / Blast Treatment:
+• Spray Tricyclazole 75% WP @ 0.6 g/L or Azoxystrobin + Difenoconazole @ 1 ml/L.
+• Avoid excessive nitrogen application during active fungal outbreaks.`;
+    } else {
+      responseText = `🐛 Integrated Pest Management (IPM):
+• Sucking pests (Aphids, Jassids): Spray Neem oil (1500 ppm @ 3-5 ml/L) or Imidacloprid 17.8% SL @ 0.5 ml/L.
+• Stem borer / Caterpillars: Apply Chlorantraniliprole 18.5% SC @ 0.3 ml/L. Always wear safety gear during application.`;
+    }
+  }
+  // 4. Government Schemes & Subsidies
+  else if (lowerMsg.includes('scheme') || lowerMsg.includes('subsidy') || lowerMsg.includes('pm kisan') || lowerMsg.includes('yojana')) {
+    responseText = `🏛️ Active Agricultural Schemes & Subsidies:
+1. PM-KISAN: ₹6,000/year in 3 equal installments directly to farmer bank accounts.
+2. Fertilizer Subsidy (DBT): Urea sold at fixed MRP of ₹242/45kg bag; P&K under NBS (Nutrient Based Subsidy).
+3. PM Fasal Bima Yojana (PMFBY): Crop insurance against drought, unseasonal rains, and pests.
+4. Soil Health Card Scheme: Free soil testing for N, P, K, pH, and micronutrients every 2 years.`;
+  }
+  // 5. Stock & Shop Inventory
+  else if (lowerMsg.includes('stock') || lowerMsg.includes('inventory') || lowerMsg.includes('available')) {
+    try {
+      const [topProducts] = await db.execute(
+        'SELECT name, quantity, price FROM products WHERE shop_id = ? AND quantity > 0 ORDER BY quantity DESC LIMIT 3',
+        [req.user.shop_id || 1]
+      );
+      if (topProducts.length > 0) {
+        const prodList = topProducts.map(p => `• ${p.name}: ${p.quantity} bags (₹${parseFloat(p.price).toFixed(0)})`).join('\n');
+        responseText = `📦 Current In-Stock Fast Moving Fertilizers:\n${prodList}\n\nVisit the Shop tab to place online orders or book counter delivery.`;
+      } else {
+        responseText = `📦 We have fresh stock coming in this week. Please check the Shop catalog for active availability.`;
+      }
+    } catch {
+      responseText = `📦 Store inventory is active. Check the Products catalog for real-time bag counts and prices.`;
+    }
+  }
+  // 6. Natural Language Fallback
+  else {
+    responseText = `🧑‍🌾 Hello! As your Agricultural AI Assistant, I can guide you on:
+• Specific NPK dosage and fertilizer schedules for ${crop}.
+• Diagnosing leaf yellowing, fungal blight, and pest attacks.
+• Checking mixing compatibility between chemicals (e.g. Zinc & DAP).
+• PM-KISAN, crop insurance, and government subsidy schemes.
+What crop or symptom would you like advice on?`;
   }
 
   res.json({ text: responseText });
