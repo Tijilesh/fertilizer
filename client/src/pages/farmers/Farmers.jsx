@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Trash2, Eye, Users, TrendingUp, Phone, MapPin, Edit, MessageSquare, AlertCircle } from 'lucide-react'
+import { Plus, Search, Trash2, Eye, Users, TrendingUp, Phone, MapPin, Edit, MessageSquare, AlertCircle, Calendar } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
-import { WhatsAppReminderModal } from '../../components/common'
+import { WhatsAppReminderModal, MonthlyRemindersModal } from '../../components/common'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 const Farmers = () => {
@@ -16,6 +16,8 @@ const Farmers = () => {
   const hasFetchedRef = useRef(false)
   const [editingFarmer, setEditingFarmer] = useState(null)
   const [reminderFarmer, setReminderFarmer] = useState(null)
+  const [showMonthlyRemindersModal, setShowMonthlyRemindersModal] = useState(false)
+  const [monthlyPendingCount, setMonthlyPendingCount] = useState(0)
 
   useEffect(() => {
     if (hasFetchedRef.current) return
@@ -28,6 +30,13 @@ const Farmers = () => {
       setLoading(true)
       const response = await api.get('/farmers')
       setFarmers(response.data)
+
+      // Fetch pending reminders count for badge
+      api.get('/credit-reminders').then(res => {
+        if (res.data?.summary?.pendingCount !== undefined) {
+          setMonthlyPendingCount(res.data.summary.pendingCount)
+        }
+      }).catch(() => {})
     } catch (error) {
       console.error('Error fetching farmers:', error)
       toast.error(error.response?.data?.error || 'Failed to fetch farmers')
@@ -90,10 +99,24 @@ const Farmers = () => {
             <p className="text-green-100 mt-1">{farmers.length} {t('farmersInDatabase') || 'farmers in database'}</p>
           </div>
         </div>
-        <Link to="/farmers/add" className="bg-white text-green-600 px-6 py-3 rounded-xl font-bold hover:bg-green-50 transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
-          <Plus className="w-5 h-5" />
-          <span>{t('addFarmer') || 'Add Farmer'}</span>
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setShowMonthlyRemindersModal(true)}
+            className="bg-emerald-700/90 hover:bg-emerald-800 text-white px-5 py-3 rounded-xl font-bold transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 border border-white/20"
+          >
+            <Calendar className="w-5 h-5 text-emerald-200" />
+            <span>Monthly Reminders</span>
+            {monthlyPendingCount > 0 && (
+              <span className="bg-amber-400 text-gray-900 text-xs px-2 py-0.5 rounded-full font-black animate-pulse">
+                {monthlyPendingCount} Due
+              </span>
+            )}
+          </button>
+          <Link to="/farmers/add" className="bg-white text-green-600 px-6 py-3 rounded-xl font-bold hover:bg-green-50 transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+            <Plus className="w-5 h-5" />
+            <span>{t('addFarmer') || 'Add Farmer'}</span>
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
@@ -131,7 +154,7 @@ const Farmers = () => {
             </div>
           </div>
         </div>
-        <div className="glass-card premium-shadow p-6 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/50 to-white">
+        <div className="glass-card premium-shadow p-6 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/50 to-white flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-amber-700 font-semibold">{t('outstandingCredit') || 'Outstanding Credit'}</p>
@@ -146,6 +169,13 @@ const Farmers = () => {
               <AlertCircle className="w-6 h-6" />
             </div>
           </div>
+          <button
+            onClick={() => setShowMonthlyRemindersModal(true)}
+            className="mt-3 text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 hover:underline self-start"
+          >
+            <span>Open Reminders Queue</span>
+            <span>&rarr;</span>
+          </button>
         </div>
       </div>
 
@@ -324,6 +354,13 @@ const Farmers = () => {
         isOpen={Boolean(reminderFarmer)}
         onClose={() => setReminderFarmer(null)}
         farmer={reminderFarmer}
+      />
+
+      {/* Automated Monthly WhatsApp Reminders Modal */}
+      <MonthlyRemindersModal
+        isOpen={showMonthlyRemindersModal}
+        onClose={() => setShowMonthlyRemindersModal(false)}
+        onQueueUpdated={fetchFarmers}
       />
     </div>
   )

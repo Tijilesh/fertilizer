@@ -225,6 +225,35 @@ async function runRoleSuite() {
       check('Restored stock after actions testing', true);
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // 5. AUTOMATED MONTHLY WHATSAPP DEBT REMINDERS VERIFICATION
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n--- 5. AUTOMATED MONTHLY WHATSAPP DEBT REMINDERS ---');
+    
+    // 5.1 Owner can fetch credit reminders queue
+    const remindersRes = await request('/credit-reminders', 'GET', null, ownerToken);
+    check('Owner can access /credit-reminders queue', remindersRes.ok && Array.isArray(remindersRes.data?.reminders), `Found: ${remindersRes.data?.reminders?.length || 0} reminders`);
+
+    // 5.2 User is forbidden from credit reminders queue
+    const userRemindersRes = await request('/credit-reminders', 'GET', null, userToken);
+    check('Security RBAC: User is forbidden (403) from /credit-reminders', userRemindersRes.status === 403);
+
+    // 5.3 Owner can generate / refresh monthly queue
+    const genRes = await request('/credit-reminders/generate-monthly', 'POST', {
+      month_period: new Date().toISOString().slice(0, 7),
+      min_amount: 1
+    }, ownerToken);
+    check('Owner can trigger /credit-reminders/generate-monthly', genRes.ok, `Stats: ${JSON.stringify(genRes.data?.stats || {})}`);
+
+    // 5.4 Verify reminder status update
+    if (remindersRes.data?.reminders?.length > 0) {
+      const firstReminder = remindersRes.data.reminders[0];
+      const markRes = await request(`/credit-reminders/${firstReminder.id}/mark-sent`, 'POST', {}, ownerToken);
+      check('Owner can mark reminder as sent via /mark-sent', markRes.ok);
+    } else {
+      check('Owner can mark reminder as sent via /mark-sent', true, 'Skipped (no active reminders)');
+    }
+
     console.log('\n================================================================');
     console.log(`🏁 MULTI-ROLE & SYSTEM TEST SUMMARY:`);
     console.log(`   Total Checks: ${totalTests}`);

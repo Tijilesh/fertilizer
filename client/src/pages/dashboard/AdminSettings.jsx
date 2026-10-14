@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Settings, Save, Store, Copy, Check } from 'lucide-react'
+import { Settings, Save, Store, Copy, Check, Calendar, Bell } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
-import { CompatibilityRulesManager } from '../../components/common'
+import { CompatibilityRulesManager, MonthlyRemindersModal } from '../../components/common'
 
 const AdminSettings = () => {
   const { user } = useAuth()
@@ -13,10 +13,16 @@ const AdminSettings = () => {
     shop_address: 'Main Market Mandi, Station Road',
     shop_gstin: '09AAACK1234M1Z5',
     shop_license: 'FERT/DL/2024/481',
-    upi_id: ''
+    upi_id: '',
+    auto_reminder_enabled: 'true',
+    auto_reminder_day: '1',
+    auto_reminder_min_amount: '100',
+    auto_reminder_default_lang: 'te',
+    auto_reminder_urgency: 'gentle'
   })
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showRemindersModal, setShowRemindersModal] = useState(false)
 
   useEffect(() => {
     fetchSettings()
@@ -178,6 +184,86 @@ const AdminSettings = () => {
             </p>
           </div>
 
+          {/* Automated Monthly Debt Reminders Schedule */}
+          <div className="pt-6 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-emerald-600" />
+                  Automated Monthly WhatsApp Debt Reminders
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Automatically calculates dues and prepares WhatsApp notices on the scheduled date
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRemindersModal(true)}
+                className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              >
+                <Calendar className="w-4 h-4" /> Open Reminders Queue
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Auto-Reminder Generation</label>
+                <select
+                  value={shopProfile.auto_reminder_enabled}
+                  onChange={(e) => setShopProfile({ ...shopProfile, auto_reminder_enabled: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+                >
+                  <option value="true">✅ Enabled (Runs Automatically Every Month)</option>
+                  <option value="false">⛔ Disabled</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Scheduled Day of Month</label>
+                <select
+                  value={shopProfile.auto_reminder_day}
+                  onChange={(e) => setShopProfile({ ...shopProfile, auto_reminder_day: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+                >
+                  <option value="1">1st of Month (Recommended)</option>
+                  <option value="5">5th of Month</option>
+                  <option value="10">10th of Month</option>
+                  <option value="15">15th of Month</option>
+                  <option value="25">25th of Month</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Minimum Debt Threshold (₹)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={shopProfile.auto_reminder_min_amount}
+                  onChange={(e) => setShopProfile({ ...shopProfile, auto_reminder_min_amount: e.target.value })}
+                  placeholder="e.g. 100"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+                />
+                <p className="text-xs text-gray-500 mt-1">Only farmers with dues at or above this amount will be queued.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Default Reminder Language</label>
+                <select
+                  value={shopProfile.auto_reminder_default_lang}
+                  onChange={(e) => setShopProfile({ ...shopProfile, auto_reminder_default_lang: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+                >
+                  <option value="te">🌾 Telugu (తెలుగు)</option>
+                  <option value="hi">🇮🇳 Hindi (हिंदी)</option>
+                  <option value="en">🌐 English</option>
+                  <option value="ta">🇮🇳 Tamil (தமிழ்)</option>
+                  <option value="kn">🇮🇳 Kannada (ಕನ್ನಡ)</option>
+                  <option value="mr">🇮🇳 Marathi (मराठी)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           <button
             type="submit"
             disabled={loading}
@@ -191,6 +277,12 @@ const AdminSettings = () => {
 
       {/* Fertilizer Compatibility Rules Management */}
       <CompatibilityRulesManager />
+
+      {/* Monthly Reminders Queue Modal */}
+      <MonthlyRemindersModal
+        isOpen={showRemindersModal}
+        onClose={() => setShowRemindersModal(false)}
+      />
     </div>
   )
 }

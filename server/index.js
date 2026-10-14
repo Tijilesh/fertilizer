@@ -106,6 +106,7 @@ async function connectDatabase() {
 
     console.log('Connected to MySQL database.');
     await initializeDatabase();
+    initAutoReminderScheduler();
   } catch (error) {
     console.error('CRITICAL: Failed to connect to MySQL database.');
     console.error('Error details:', error.message);
@@ -568,6 +569,40 @@ async function initializeDatabase() {
     `);
   } catch (e) {
     console.error('Compatibility cleanup error:', e.message);
+  }
+
+  // Ensure credit_reminders columns for automated monthly reminders
+  try {
+    if (!(await columnExists('credit_reminders', 'farmer_id'))) {
+      await db.execute('ALTER TABLE credit_reminders ADD COLUMN farmer_id INT NULL');
+    }
+    if (!(await columnExists('credit_reminders', 'phone'))) {
+      await db.execute('ALTER TABLE credit_reminders ADD COLUMN phone VARCHAR(20) NULL');
+    }
+    if (!(await columnExists('credit_reminders', 'principal_amount'))) {
+      await db.execute('ALTER TABLE credit_reminders ADD COLUMN principal_amount DECIMAL(10,2) DEFAULT 0');
+    }
+    if (!(await columnExists('credit_reminders', 'interest_amount'))) {
+      await db.execute('ALTER TABLE credit_reminders ADD COLUMN interest_amount DECIMAL(10,2) DEFAULT 0');
+    }
+    if (!(await columnExists('credit_reminders', 'month_period'))) {
+      await db.execute('ALTER TABLE credit_reminders ADD COLUMN month_period VARCHAR(10) NULL');
+    }
+    if (!(await columnExists('credit_reminders', 'language'))) {
+      await db.execute("ALTER TABLE credit_reminders ADD COLUMN language VARCHAR(10) DEFAULT 'te'");
+    }
+    if (!(await columnExists('credit_reminders', 'message_text'))) {
+      await db.execute('ALTER TABLE credit_reminders ADD COLUMN message_text TEXT NULL');
+    }
+    if (!(await columnExists('credit_reminders', 'reminder_type'))) {
+      await db.execute("ALTER TABLE credit_reminders ADD COLUMN reminder_type VARCHAR(50) DEFAULT 'automated_monthly'");
+    }
+    if (!(await columnExists('credit_reminders', 'sent_at'))) {
+      await db.execute('ALTER TABLE credit_reminders ADD COLUMN sent_at DATETIME NULL');
+    }
+    await db.execute("ALTER TABLE credit_reminders MODIFY COLUMN status VARCHAR(50) DEFAULT 'due'");
+  } catch (err) {
+    console.error('credit_reminders migration error:', err.message);
   }
 
   console.log('Database tables initialized.');
@@ -2677,7 +2712,296 @@ app.get('/api/reports/sales', verifyToken, async (req, res) => {
   }
 });
 
-// Create order
+// ── Automated Monthly WhatsApp Debt Reminders ──────────────────────────────
+
+function buildReminderMessage({ farmerName, totalDue, shopName, upiId, shopPhone, lang = 'te', urgency = 'gentle' }) {
+  const upiPart = upiId ? `\n💳 Pay via UPI ID: ${upiId}` : '';
+  const phonePart = shopPhone ? `\n📞 Helpline: ${shopPhone}` : '';
+  const due = parseFloat(totalDue || 0).toFixed(2);
+
+  if (lang === 'te') {
+    if (urgency === 'urgent') {
+      return `⚠️ ముఖ్యమైన చెల్లింపు సమాచారం\n\nప్రియమైన ${farmerName} గారు,\n${shopName} వద్ద మీ వ్యవసాయ ఖాతా బాకీ బిల్లు ₹${due} ఇంకా పెండింగ్‌లో ఉంది.\n\nవచ్చే పంట సీజన్‌లో ఎరువులు మరియు విత్తనాల సదుపాయం నిరంతరాయంగా కొనసాగడానికి దయచేసి బాకీని వెంటనే చెల్లించవలసిందిగా మనవి.${upiPart}${phonePart}\n\nధన్యవాదాలు.`;
+    }
+    return `నమస్కారం ${farmerName} గారు, 🙏\n\nఇది ${shopName} నుండి నెలవారీ ఖాతా బాకీ రిమైండర్. మీ ఎరువులు మరియు విత్తనాల ఖాతాలో మొత్తం బాకీ బిల్లు ₹${due} ఉంది.\n\nదయచేసి మీ వీలును బట్టి త్వరగా చెల్లించవలసిందిగా కోరుతున్నాము.${upiPart}${phonePart}\n\nధన్యవాదాలు మరియు శుభ వ్యవసాయం! 🌱`;
+  } else if (lang === 'hi') {
+    if (urgency === 'urgent') {
+      return `⚠️ आवश्यक भुगतान सूचना\n\nप्रिय ${farmerName} जी,\n${shopName} पर आपके कृषि खाते का बकाया बिल ₹${due} लंबित है।\n\nकृपया आगामी सीजन की खाद/बीज आपूर्ति एवं क्रेडिट जारी रखने हेतु जल्द भुगतान करें।${upiPart}${phonePart}\n\nधन्यवाद।`;
+    }
+    return `नमस्ते ${farmerName} जी, 🙏\n\nयह ${shopName} की तरफ से मासिक खाता बकाया अनुस्मारक है। आपके खाद एवं बीज खाते का कुल बकाया बिल ₹${due} है।\n\nकृपया सुविधानुसार जल्द से जल्द भुगतान करने का कष्ट करें।${upiPart}${phonePart}\n\nधन्यवाद एवं शुभ कृषि! 🌱`;
+  } else if (lang === 'ta') {
+    if (urgency === 'urgent') {
+      return `⚠️ முக்கியமான நிலுவை அறிவிப்பு\n\nஅன்புள்ள ${farmerName} அவர்களே,\n${shopName} கடையில் உங்கள் விவசாய கணக்கு நிலுவை ₹${due} நீண்ட நாட்களாக நிலுவையில் உள்ளது.\n\nஅடுத்த பருவத்திற்கான உரம் மற்றும் கடன் தொடர தயவுசெய்து உடனே தொகையை செலுத்தவும்.${upiPart}${phonePart}\n\nநன்றி.`;
+    }
+    return `வணக்கம் ${farmerName} அவர்களே, 🙏\n\nஇது ${shopName} நிறுவனத்தின் மாதந்திர நிலுவைத் தொகை நினைவூட்டல். உங்கள் உரம் மற்றும் விதை கணக்கில் நிலுவை ₹${due} உள்ளது.\n\nதயவுசெய்து உங்கள் வசதிக்கேற்ப நிலுவையை விரைவில் செலுத்துமாறு கேட்டுக்கொள்கிறோம்.${upiPart}${phonePart}\n\nநன்றி & நல்விவசாயம்! 🌱`;
+  } else if (lang === 'kn') {
+    if (urgency === 'urgent') {
+      return `⚠️ ಮುಖ್ಯ ಬಾಕಿ ಪಾವತಿ ಸೂಚನೆ\n\nಆತ್ಮೀಯ ${farmerName} ಅವರೇ,\n${shopName} ನಲ್ಲಿ ನಿಮ್ಮ ಕೃಷಿ ಖಾತೆಯ ಬಾಕಿ ಬಿಲ್ ₹${due} ಇನ್ನೂ ಬಾಕಿ ಉಳಿದಿದೆ.\n\nಮುಂದಿನ ಕೃಷಿ ಸೀಸನ್‌ನಲ್ಲಿ ಸೌಲಭ್ಯ ನಿರಂತರವಾಗಿರಲು ದಯವಿಟ್ಟು ಬಾಕಿಯನ್ನು ಶೀಘ್ರವೇ ಪಾವತಿಸಿ.${upiPart}${phonePart}\n\nಧನ್ಯವಾದಗಳು.`;
+    }
+    return `ನಮಸ್ಕಾರ ${farmerName} ಅವರೇ, 🙏\n\nಇದು ${shopName} ವತಿಯಿಂದ ಮಾಸಿಕ ಪಾವತಿ ಜ್ಞಾಪನೆ. ನಿಮ್ಮ ರಸಗೊಬ್ಬರ ಮತ್ತು ಬೀಜಗಳ ಖಾತೆಯಲ್ಲಿ ಒಟ್ಟು ಬಾಕಿ ₹${due} ಇದೆ.\n\nದಯವಿಟ್ಟು ನಿಮ್ಮ ಅನುಕೂಲಕ್ಕೆ ತಕ್ಕಂತೆ ಶೀಘ್ರವೇ ಪಾವತಿಸಲು ವಿನಂತಿ.${upiPart}${phonePart}\n\nಧನ್ಯವಾದಗಳು & ಹರ್ಷದ ಕೃಷಿ! 🌱`;
+  } else if (lang === 'mr') {
+    if (urgency === 'urgent') {
+      return `⚠️ महत्त्वाची बाकी देयक सूचना\n\nप्रिय ${farmerName} जी,\n${shopName} कडे आपल्या कृषी खात्याचे बाकी बिल ₹${due} प्रलंबित आहे.\n\nपुढील हंगामात खत आणि पतपुरवठा अखंड सुरू ठेवण्यासाठी कृपया तातडीने देयक पूर्ण करावे.${upiPart}${phonePart}\n\nधन्यवाद.`;
+    }
+    return `नमस्कार ${farmerName} जी, 🙏\n\nहे ${shopName} कडून एक मासिक देयक स्मरणपत्र आहे. आपल्या खते व बियाणे खात्यावरील एकूण बाकी बिल ₹${due} आहे.\n\nकृपया आपल्या सोयीनुसार लवकरात लवकर रक्कम भरावी.${upiPart}${phonePart}\n\nधन्यवाद व समृद्ध शेती! 🌱`;
+  } else {
+    // English
+    if (urgency === 'urgent') {
+      return `⚠️ MONTHLY PAYMENT NOTICE\n\nDear ${farmerName} ji,\nThis is to notify that your fertilizer account balance of ₹${due} at ${shopName} is currently pending clearance.\n\nPlease settle the dues at your earliest convenience to maintain continuous seasonal credit.${upiPart}${phonePart}\n\nThank you.`;
+    }
+    return `Hello ${farmerName} ji, 🙏\n\nThis is a gentle monthly payment reminder from ${shopName}. Your outstanding fertilizer bill balance is ₹${due}.\n\nKindly clear the pending payment at your convenience.${upiPart}${phonePart}\n\nThank you & happy farming! 🌱`;
+  }
+}
+
+async function generateMonthlyRemindersForShop(shopId, targetPeriod, overrides = {}) {
+  const [settingsRows] = await db.execute('SELECT setting_key, setting_value FROM shop_settings WHERE shop_id = ?', [shopId]);
+  const settings = settingsRows.reduce((acc, row) => ({ ...acc, [row.setting_key]: row.setting_value }), {});
+
+  const minAmount = parseFloat(overrides.min_amount !== undefined ? overrides.min_amount : (settings.auto_reminder_min_amount || '100'));
+  const defaultLang = overrides.language || settings.auto_reminder_default_lang || 'te';
+  const urgency = overrides.urgency || settings.auto_reminder_urgency || 'gentle';
+  const shopName = settings.shop_name || 'Agro & Fertilizer Center';
+  const upiId = settings.upi_id || '';
+  const shopPhone = settings.shop_phone || '';
+
+  const [farmers] = await db.execute(`
+    SELECT id, name, phone, current_credit, accrued_interest,
+           (COALESCE(current_credit, 0) + COALESCE(accrued_interest, 0)) as total_due
+    FROM farmers
+    WHERE shop_id = ? AND status = 'active'
+      AND (COALESCE(current_credit, 0) + COALESCE(accrued_interest, 0)) >= ?
+  `, [shopId, minAmount]);
+
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  for (const farmer of farmers) {
+    const totalDue = parseFloat(farmer.total_due || 0);
+    const principal = parseFloat(farmer.current_credit || 0);
+    const interest = parseFloat(farmer.accrued_interest || 0);
+
+    const message = buildReminderMessage({
+      farmerName: farmer.name,
+      totalDue,
+      shopName,
+      upiId,
+      shopPhone,
+      lang: defaultLang,
+      urgency
+    });
+
+    const [existing] = await db.execute(`
+      SELECT id, status FROM credit_reminders
+      WHERE shop_id = ? AND farmer_id = ? AND month_period = ?
+      LIMIT 1
+    `, [shopId, farmer.id, targetPeriod]);
+
+    if (existing.length > 0) {
+      if (existing[0].status !== 'sent') {
+        await db.execute(`
+          UPDATE credit_reminders
+          SET amount = ?, principal_amount = ?, interest_amount = ?, message_text = ?, language = ?
+          WHERE id = ?
+        `, [totalDue, principal, interest, message, defaultLang, existing[0].id]);
+        updatedCount++;
+      }
+    } else {
+      await db.execute(`
+        INSERT INTO credit_reminders
+        (shop_id, farmer_id, customer_name, phone, amount, principal_amount, interest_amount, due_date, status, reminder_type, month_period, language, message_text)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), 'due', 'automated_monthly', ?, ?, ?)
+      `, [shopId, farmer.id, farmer.name, farmer.phone, totalDue, principal, interest, targetPeriod, defaultLang, message]);
+      createdCount++;
+    }
+  }
+
+  return { createdCount, updatedCount, totalProcessed: farmers.length, period: targetPeriod };
+}
+
+async function runScheduledMonthlyReminders() {
+  if (!db) return;
+  try {
+    const now = new Date();
+    const currentDay = now.getDate();
+    const currentPeriod = now.toISOString().slice(0, 7);
+
+    const [shops] = await db.execute('SELECT id FROM shops');
+    for (const shop of shops) {
+      const [settingsRows] = await db.execute('SELECT setting_key, setting_value FROM shop_settings WHERE shop_id = ?', [shop.id]);
+      const settings = settingsRows.reduce((acc, row) => ({ ...acc, [row.setting_key]: row.setting_value }), {});
+
+      const isEnabled = settings.auto_reminder_enabled !== 'false';
+      const scheduledDay = parseInt(settings.auto_reminder_day || '1', 10);
+
+      if (isEnabled && currentDay >= scheduledDay) {
+        const [[check]] = await db.execute(
+          'SELECT COUNT(*) as count FROM credit_reminders WHERE shop_id = ? AND month_period = ?',
+          [shop.id, currentPeriod]
+        );
+        if (check.count === 0) {
+          console.log(`[AutoReminderScheduler] Auto-generating monthly reminders for shop ${shop.id} (${currentPeriod})...`);
+          await generateMonthlyRemindersForShop(shop.id, currentPeriod, settings);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[AutoReminderScheduler] Error:', err.message);
+  }
+}
+
+function initAutoReminderScheduler() {
+  setTimeout(runScheduledMonthlyReminders, 5000);
+  setInterval(runScheduledMonthlyReminders, 4 * 60 * 60 * 1000);
+}
+
+// Credit Reminders API
+app.get('/api/credit-reminders', verifyToken, async (req, res) => {
+  if (req.user.role !== 'owner' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const period = req.query.period || currentMonth;
+  const status = req.query.status;
+
+  try {
+    let query = `
+      SELECT cr.*, 
+             f.name as farmer_name, 
+             COALESCE(cr.phone, f.phone) as farmer_phone,
+             f.current_credit as current_principal, 
+             f.accrued_interest as current_accrued_interest,
+             (COALESCE(f.current_credit, 0) + COALESCE(f.accrued_interest, 0)) as live_total_due
+      FROM credit_reminders cr
+      LEFT JOIN farmers f ON cr.farmer_id = f.id
+      WHERE cr.shop_id = ?
+    `;
+    const params = [shopId];
+
+    if (period && period !== 'all') {
+      query += ' AND cr.month_period = ?';
+      params.push(period);
+    }
+
+    if (status && status !== 'all') {
+      query += ' AND cr.status = ?';
+      params.push(status);
+    }
+
+    query += ' ORDER BY cr.created_at DESC, cr.amount DESC';
+
+    const [rows] = await db.execute(query, params);
+
+    const totalDue = rows.filter(r => r.status !== 'dismissed').reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
+    const pendingCount = rows.filter(r => r.status === 'due' || r.status === 'overdue').length;
+    const sentCount = rows.filter(r => r.status === 'sent').length;
+
+    res.json({
+      reminders: rows,
+      summary: {
+        totalDue,
+        pendingCount,
+        sentCount,
+        totalCount: rows.length,
+        period
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/credit-reminders/generate-monthly', verifyToken, async (req, res) => {
+  if (req.user.role !== 'owner' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const shopId = req.user.shop_id || 1;
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const targetPeriod = req.body.month_period || currentMonth;
+  const { min_amount, language, urgency } = req.body;
+
+  try {
+    const stats = await generateMonthlyRemindersForShop(shopId, targetPeriod, {
+      min_amount,
+      language,
+      urgency
+    });
+    res.json({ message: 'Monthly reminders generated successfully', stats });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/credit-reminders/:id/mark-sent', verifyToken, async (req, res) => {
+  if (req.user.role !== 'owner' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  try {
+    const [result] = await db.execute(
+      'UPDATE credit_reminders SET status = "sent", sent_at = NOW() WHERE id = ? AND shop_id = ?',
+      [req.params.id, req.user.shop_id || 1]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Reminder not found' });
+    res.json({ message: 'Marked as sent' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/credit-reminders/bulk-mark-sent', verifyToken, async (req, res) => {
+  if (req.user.role !== 'owner' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'Valid array of reminder ids is required' });
+  }
+  try {
+    const placeholders = ids.map(() => '?').join(',');
+    await db.execute(
+      `UPDATE credit_reminders SET status = "sent", sent_at = NOW() WHERE id IN (${placeholders}) AND shop_id = ?`,
+      [...ids, req.user.shop_id || 1]
+    );
+    res.json({ message: `Marked ${ids.length} reminders as sent` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/credit-reminders/:id/dismiss', verifyToken, async (req, res) => {
+  if (req.user.role !== 'owner' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  try {
+    const [result] = await db.execute(
+      'UPDATE credit_reminders SET status = "dismissed" WHERE id = ? AND shop_id = ?',
+      [req.params.id, req.user.shop_id || 1]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Reminder not found' });
+    res.json({ message: 'Reminder dismissed' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/credit-reminders/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'owner' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  const { message_text, language } = req.body;
+  try {
+    await db.execute(
+      'UPDATE credit_reminders SET message_text = COALESCE(?, message_text), language = COALESCE(?, language) WHERE id = ? AND shop_id = ?',
+      [message_text, language, req.params.id, req.user.shop_id || 1]
+    );
+    res.json({ message: 'Reminder updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Settings API
 app.get('/api/settings', verifyToken, async (req, res) => {
   try {
