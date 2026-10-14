@@ -43,7 +43,8 @@ function numberToWords(num) {
 }
 
 const PrintableInvoice = ({ sale, shopSettings, onBack, initialFormat = 'a4', autoPrint = false }) => {
-  const [printFormat, setPrintFormat] = useState(initialFormat) // 'a4' or 'thermal'
+  const effectiveInitialFormat = shopSettings?.default_invoice_format || initialFormat
+  const [printFormat, setPrintFormat] = useState(effectiveInitialFormat) // 'a4', 'thermal', or 'thermal_58'
 
   useEffect(() => {
     if (autoPrint) {
@@ -60,7 +61,12 @@ const PrintableInvoice = ({ sale, shopSettings, onBack, initialFormat = 'a4', au
     address: shopSettings?.shop_address || 'Main Market Mandi, Station Road',
     gstin: shopSettings?.shop_gstin || '09AAACK1234M1Z5',
     license: shopSettings?.shop_license || 'FERT/DL/2024/481',
-    upiId: shopSettings?.upi_id || ''
+    upiId: shopSettings?.upi_id || '',
+    logo: shopSettings?.shop_logo || '',
+    footerNote: shopSettings?.invoice_footer_note || 'Goods once sold cannot be returned without original batch tag. Subject to local jurisdiction.',
+    greeting: shopSettings?.invoice_greeting || 'Thank You! Happy Farming! 🌱',
+    terms: shopSettings?.invoice_terms || 'Payment due on receipt. Interest applicable on delayed khata dues.',
+    showQr: shopSettings?.show_qr_on_thermal !== 'false'
   }
 
   const invoiceNumber = `INV-${new Date(sale.sale_date).getFullYear()}-${String(sale.id).padStart(5, '0')}`
@@ -120,10 +126,10 @@ ${shop.address} | Ph: ${shop.phone}`
           Back to Sales
         </button>
 
-        <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-2xl">
+        <div className="flex flex-wrap items-center gap-2 bg-gray-100 p-1.5 rounded-2xl">
           <button
             onClick={() => setPrintFormat('a4')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
               printFormat === 'a4'
                 ? 'bg-white text-emerald-700 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
@@ -134,14 +140,25 @@ ${shop.address} | Ph: ${shop.phone}`
           </button>
           <button
             onClick={() => setPrintFormat('thermal')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
               printFormat === 'thermal'
                 ? 'bg-white text-emerald-700 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
+            <Printer className="w-4 h-4" />
+            3&quot; POS Thermal (80mm)
+          </button>
+          <button
+            onClick={() => setPrintFormat('thermal_58')}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              printFormat === 'thermal_58'
+                ? 'bg-white text-emerald-700 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
             <Smartphone className="w-4 h-4" />
-            3&quot; POS Thermal Slip
+            2&quot; Mobile Thermal (58mm)
           </button>
         </div>
 
@@ -149,7 +166,7 @@ ${shop.address} | Ph: ${shop.phone}`
           {sale.customer_phone && (
             <button
               onClick={handleShareWhatsApp}
-              className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-all shadow-md shadow-green-600/30"
+              className="flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-all shadow-md shadow-green-600/30 text-xs sm:text-sm"
               title="Share Bill Receipt via WhatsApp"
             >
               <Share2 className="w-4 h-4" />
@@ -159,10 +176,10 @@ ${shop.address} | Ph: ${shop.phone}`
 
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/30"
+            className="flex items-center gap-2 px-5 sm:px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/30 text-xs sm:text-sm"
           >
             <Printer className="w-5 h-5" />
-            Print {printFormat === 'a4' ? 'Invoice' : 'Slip'}
+            Print {printFormat === 'a4' ? 'Invoice' : printFormat === 'thermal_58' ? '58mm Slip' : '80mm Slip'}
           </button>
         </div>
       </div>
@@ -185,13 +202,13 @@ ${shop.address} | Ph: ${shop.phone}`
             top: 0 !important;
             width: 100% !important;
             margin: 0 !important;
-            padding: 0 !important;
+            padding: ${printFormat === 'a4' ? '15px' : '4px'} !important;
             background: white !important;
             box-shadow: none !important;
           }
           @page {
-            margin: 10mm;
-            size: ${printFormat === 'a4' ? 'A4 portrait' : '80mm auto'};
+            margin: ${printFormat === 'a4' ? '8mm' : '2mm'};
+            size: ${printFormat === 'a4' ? 'A4 portrait' : printFormat === 'thermal_58' ? '58mm auto' : '80mm auto'};
           }
         }
       `}</style>
@@ -203,16 +220,25 @@ ${shop.address} | Ph: ${shop.phone}`
         <div className="printable-invoice-container bg-white rounded-3xl p-8 sm:p-12 shadow-2xl border border-gray-200 max-w-4xl mx-auto text-gray-900">
           {/* Header */}
           <div className="border-b-2 border-gray-800 pb-6 mb-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 font-bold text-xs uppercase tracking-widest rounded-md mb-2">
-                  Tax Invoice / Cash Memo
-                </span>
-                <h1 className="text-3xl font-black tracking-tight text-gray-900">{shop.name}</h1>
-                <p className="text-sm text-gray-600 font-medium mt-1">{shop.address}</p>
-                <p className="text-sm text-gray-600 font-medium">Helpline / Phone: {shop.phone}</p>
+            <div className="flex justify-between items-start gap-4">
+              <div className="flex items-start gap-4">
+                {shop.logo && (
+                  <img
+                    src={shop.logo}
+                    alt={shop.name}
+                    className="h-16 w-16 sm:h-20 sm:w-20 object-contain rounded-2xl border border-gray-200 bg-white p-1 shadow-sm shrink-0"
+                  />
+                )}
+                <div>
+                  <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 font-bold text-xs uppercase tracking-widest rounded-md mb-2">
+                    Tax Invoice / Cash Memo
+                  </span>
+                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-gray-900">{shop.name}</h1>
+                  <p className="text-sm text-gray-600 font-medium mt-1">{shop.address}</p>
+                  <p className="text-sm text-gray-600 font-medium">Helpline / Phone: {shop.phone}</p>
+                </div>
               </div>
-              <div className="text-right text-xs space-y-1 font-mono">
+              <div className="text-right text-xs space-y-1 font-mono shrink-0">
                 <p><span className="font-bold text-gray-500">GSTIN:</span> <span className="font-bold text-gray-900">{shop.gstin}</span></p>
                 <p><span className="font-bold text-gray-500">FERT LIC NO:</span> <span className="font-bold text-gray-900">{shop.license}</span></p>
                 <p className="pt-2 text-emerald-700 font-sans font-bold text-sm">Govt. Authorized Dealer</p>
@@ -275,12 +301,16 @@ ${shop.address} | Ph: ${shop.phone}`
                 {numberToWords(totalAmount)}
               </p>
 
-              {/* Terms */}
+              {/* Terms & Custom Notes */}
               <div className="mt-4 text-[11px] text-gray-500 space-y-1">
                 <p className="font-bold text-gray-700">Terms &amp; Conditions:</p>
-                <p>1. Check bag seal, batch number, and expiry date before application.</p>
-                <p>2. Keep agrochemicals stored in a dry, ventilated shed away from livestock.</p>
-                <p>3. Goods once sold will not be returned. Computer-generated tax invoice.</p>
+                <p className="whitespace-pre-line">{shop.terms || '1. Check bag seal, batch number, and expiry date before application.\n2. Keep agrochemicals stored in a dry, ventilated shed away from livestock.\n3. Goods once sold will not be returned. Computer-generated tax invoice.'}</p>
+                {shop.footerNote && (
+                  <p className="text-gray-400 italic pt-1 border-t border-gray-100">{shop.footerNote}</p>
+                )}
+                {shop.greeting && (
+                  <p className="text-emerald-700 font-bold pt-1">{shop.greeting}</p>
+                )}
               </div>
             </div>
 
@@ -326,6 +356,13 @@ ${shop.address} | Ph: ${shop.phone}`
         <div className="printable-invoice-container bg-white p-6 rounded-2xl shadow-xl border border-gray-300 max-w-[340px] mx-auto text-gray-900 font-mono text-xs">
           {/* Header */}
           <div className="text-center pb-3 border-b border-dashed border-gray-400 space-y-0.5">
+            {shop.logo && (
+              <img
+                src={shop.logo}
+                alt={shop.name}
+                className="h-10 max-w-[100px] object-contain mx-auto mb-1.5"
+              />
+            )}
             <h2 className="text-base font-black tracking-tight">{shop.name}</h2>
             <p className="text-[10px] text-gray-600">{shop.address}</p>
             <p className="text-[10px] text-gray-600">Ph: {shop.phone}</p>
@@ -399,7 +436,7 @@ ${shop.address} | Ph: ${shop.phone}`
           </div>
 
           {/* UPI QR Code if configured */}
-          {shop.upiId && (
+          {shop.showQr && shop.upiId && (
             <div className="py-3 text-center border-b border-dashed border-gray-400">
               <p className="text-[10px] font-bold mb-1">Scan &amp; Pay via UPI</p>
               <div className="flex justify-center p-1 bg-white inline-block border rounded">
@@ -411,8 +448,115 @@ ${shop.address} | Ph: ${shop.phone}`
 
           {/* Footer Note */}
           <div className="pt-3 text-center text-[10px] text-gray-500 space-y-1">
-            <p className="font-bold text-gray-800">Thank You! Happy Farming!</p>
-            <p>Please visit again</p>
+            <p className="font-bold text-gray-800">{shop.greeting || 'Thank You! Happy Farming!'}</p>
+            {shop.terms && <p className="text-[9px]">{shop.terms}</p>}
+            {shop.footerNote && <p className="text-[8px] text-gray-400 italic">{shop.footerNote}</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 3. Ultra-Compact 2-inch (58mm) Mobile Bluetooth Thermal Slip */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {printFormat === 'thermal_58' && (
+        <div className="printable-invoice-container bg-white p-3 sm:p-4 rounded-xl shadow-xl border border-gray-300 max-w-[270px] mx-auto text-gray-900 font-mono text-[10px] leading-tight">
+          {/* Header */}
+          <div className="text-center pb-2 border-b border-dashed border-gray-400 space-y-0.5">
+            {shop.logo && (
+              <img
+                src={shop.logo}
+                alt={shop.name}
+                className="h-8 max-w-[80px] object-contain mx-auto mb-1"
+              />
+            )}
+            <h2 className="text-xs font-black tracking-tight uppercase leading-snug">{shop.name}</h2>
+            <p className="text-[9px] text-gray-600 line-clamp-2">{shop.address}</p>
+            <p className="text-[9px] text-gray-700">Ph: {shop.phone}</p>
+            <div className="flex justify-center gap-2 text-[8px] font-semibold text-gray-800 pt-0.5">
+              <span>GST: {shop.gstin}</span>
+            </div>
+            <div className="text-[8px] text-gray-600">
+              <span>LIC: {shop.license}</span>
+            </div>
+          </div>
+
+          {/* Invoice Info */}
+          <div className="py-1.5 border-b border-dashed border-gray-400 text-[9px] space-y-0.5">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Bill:</span>
+              <span className="font-bold">{invoiceNumber}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Date:</span>
+              <span>{new Date(sale.sale_date).toLocaleDateString()} {new Date(sale.sale_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Farmer:</span>
+              <span className="font-bold truncate max-w-[150px]">{sale.customer_name || 'Walk-in'}</span>
+            </div>
+            {sale.customer_phone && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Phone:</span>
+                <span>{sale.customer_phone}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-gray-600">Mode:</span>
+              <span className="font-bold">{sale.payment_method || 'Cash'} ({sale.payment_status || 'Paid'})</span>
+            </div>
+          </div>
+
+          {/* Items */}
+          <div className="py-1.5 border-b border-dashed border-gray-400">
+            <div className="flex justify-between font-bold text-[9px] pb-1 border-b border-gray-200">
+              <span>Item</span>
+              <span>Qty x Rate</span>
+              <span>Total</span>
+            </div>
+            {sale.items && sale.items.map((item, idx) => (
+              <div key={idx} className="py-1 border-b border-dotted border-gray-100 last:border-0">
+                <div className="font-bold text-[9px] truncate">{item.name}</div>
+                <div className="flex justify-between text-gray-600 text-[8px]">
+                  <span>{item.type}</span>
+                  <span>{item.quantity} x ₹{parseFloat(item.price_per_unit).toFixed(0)}</span>
+                  <span className="font-bold text-gray-900">₹{parseFloat(item.total_price).toFixed(2)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Totals */}
+          <div className="py-1.5 border-b border-dashed border-gray-400 space-y-0.5 text-[9px]">
+            <div className="flex justify-between text-gray-600">
+              <span>Taxable Subtotal:</span>
+              <span>₹{taxableSubtotal}</span>
+            </div>
+            <div className="flex justify-between text-gray-600">
+              <span>CGST (9%) + SGST (9%):</span>
+              <span>₹{totalGst}</span>
+            </div>
+            <div className="flex justify-between text-xs font-black pt-1 border-t border-gray-800 text-gray-900">
+              <span>NET PAYABLE:</span>
+              <span>₹{totalAmount.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* UPI QR Code if configured */}
+          {shop.showQr && shop.upiId && (
+            <div className="py-2 text-center border-b border-dashed border-gray-400">
+              <p className="text-[9px] font-bold mb-1">Scan &amp; Pay (UPI)</p>
+              <div className="flex justify-center p-1 bg-white inline-block border rounded">
+                <QRCodeSVG value={`upi://pay?pa=${shop.upiId}&pn=${encodeURIComponent(shop.name)}&am=${totalAmount}&cu=INR`} size={72} />
+              </div>
+              <p className="text-[8px] text-gray-500 mt-0.5 break-all">{shop.upiId}</p>
+            </div>
+          )}
+
+          {/* Footer Note */}
+          <div className="pt-2 text-center text-[8px] text-gray-600 space-y-0.5">
+            <p className="font-bold text-gray-800 text-[9px]">{shop.greeting || 'Thank You! Happy Farming!'}</p>
+            {shop.terms && <p className="text-[7.5px] line-clamp-2">{shop.terms}</p>}
+            {shop.footerNote && <p className="text-[7px] text-gray-400 italic line-clamp-2">{shop.footerNote}</p>}
           </div>
         </div>
       )}

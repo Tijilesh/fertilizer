@@ -4,10 +4,12 @@ import { ArrowLeft, Plus, Minus, Save, Printer, FileText } from 'lucide-react'
 import api from '../../utils/api'
 import { useLanguage } from '../../contexts/LanguageContext'
 import toast from 'react-hot-toast'
+import { queueOfflineSale, getCachedProducts } from '../../utils/offlineStorage'
 
 const AddSale = ({ products, onSuccess }) => {
   const { t } = useLanguage()
   const navigate = useNavigate()
+  const effectiveProducts = (products && products.length > 0) ? products : getCachedProducts()
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_phone: '',
@@ -45,7 +47,7 @@ const AddSale = ({ products, onSuccess }) => {
 
       // Calculate total price if product_id or quantity changed
       if (field === 'product_id' || field === 'quantity') {
-        const product = products.find(p => p.id === parseInt(newItems[index].product_id))
+        const product = effectiveProducts.find(p => p.id === parseInt(newItems[index].product_id))
         if (product && newItems[index].quantity) {
           newItems[index].price_per_unit = product.price
           newItems[index].total_price = product.price * newItems[index].quantity
@@ -57,7 +59,7 @@ const AddSale = ({ products, onSuccess }) => {
   }
 
   const getAvailableStock = (productId) => {
-    const product = products.find(p => p.id === parseInt(productId))
+    const product = effectiveProducts.find(p => p.id === parseInt(productId))
     return product ? product.quantity : 0
   }
 
@@ -82,23 +84,38 @@ const AddSale = ({ products, onSuccess }) => {
     for (const item of selectedItems) {
       const availableStock = getAvailableStock(item.product_id)
       if (item.quantity > availableStock) {
-        const product = products.find(p => p.id === parseInt(item.product_id))
-        toast.error(`${t('insufficientStockWarning')} ${product.name}. Available: ${availableStock}`)
+        const product = effectiveProducts.find(p => p.id === parseInt(item.product_id))
+        toast.error(`${t('insufficientStockWarning')} ${product?.name || 'product'}. Available: ${availableStock}`)
         return
       }
     }
 
     setLoading(true)
 
+    const salePayload = {
+      customer_name: formData.customer_name,
+      customer_phone: formData.customer_phone,
+      items: selectedItems,
+      total_amount: calculateTotal(),
+      payment_status: formData.payment_status,
+      payment_method: formData.payment_status === 'Paid Now' ? formData.payment_method : null
+    }
+
+    // Offline field detection
+    if (!navigator.onLine) {
+      const offlineRecord = queueOfflineSale(salePayload)
+      toast.success('⚡ Offline Field Sale Saved! Queued to sync automatically when online.')
+      setLoading(false)
+      if (printMode) {
+        navigate(`/sales/offline-${offlineRecord.offline_invoice_number}?format=${printMode}&autoPrint=true`)
+      } else {
+        navigate('/sales')
+      }
+      return
+    }
+
     try {
-      const res = await api.post('/sales', {
-        customer_name: formData.customer_name,
-        customer_phone: formData.customer_phone,
-        items: selectedItems,
-        total_amount: calculateTotal(),
-        payment_status: formData.payment_status,
-        payment_method: formData.payment_status === 'Paid Now' ? formData.payment_method : null
-      })
+      const res = await api.post('/sales', salePayload)
 
       toast.success(t('saleRecordedSuccess') || 'Sale recorded successfully!')
       if (onSuccess) onSuccess()
@@ -110,6 +127,16 @@ const AddSale = ({ products, onSuccess }) => {
         navigate('/sales')
       }
     } catch (error) {
+      if (!error.response || !navigator.onLine) {
+        const offlineRecord = queueOfflineSale(salePayload)
+        toast.success('Network connection dropped. Sale saved locally to offline queue!')
+        if (printMode) {
+          navigate(`/sales/offline-${offlineRecord.offline_invoice_number}?format=${printMode}&autoPrint=true`)
+        } else {
+          navigate('/sales')
+        }
+        return
+      }
       console.error('Error recording sale:', error)
       toast.error(error.response?.data?.error || 'Error recording sale')
     } finally {
@@ -234,7 +261,7 @@ const AddSale = ({ products, onSuccess }) => {
                         className="input-field"
                       >
                         <option value="">{t('selectProduct')}</option>
-                        {products.map(product => (
+                        {effectiveProducts.map(product => (
                           <option key={product.id} value={product.id}>
                             {product.name} - ₹{product.price} (Stock: {product.quantity})
                           </option>

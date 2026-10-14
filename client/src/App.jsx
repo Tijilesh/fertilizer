@@ -4,10 +4,11 @@ import { AuthProvider } from './contexts/AuthContext'
 import { CartProvider } from './contexts/CartContext'
 import { LanguageProvider } from './contexts/LanguageContext'
 import { Login, Signup, ProtectedRoute } from './components/auth'
-import { LoadingSpinner, MainContent } from './components/common'
+import { LoadingSpinner, MainContent, OfflineBanner } from './components/common'
 import Shop from './pages/store/Shop'
 import Landing from './pages/users/Landing'
 import api from './utils/api'
+import { saveCachedProducts, getCachedProducts } from './utils/offlineStorage'
 
 import { useAuth } from './contexts/AuthContext'
 
@@ -39,12 +40,17 @@ function AppContent() {
 
       setProducts(processedProducts)
       setSales(rawSales)
+      saveCachedProducts(processedProducts)
       setServerError(null)
     } catch (err) {
       console.error('Error fetching data:', err)
-      // Show banner only for connectivity/server issues, not auth/session errors.
-      if (!err.response) {
-        setServerError('Unable to connect to server. Please try again later.')
+      // Check for offline cached products
+      const cachedProducts = getCachedProducts()
+      if (cachedProducts && cachedProducts.length > 0) {
+        setProducts(cachedProducts)
+        setServerError(null)
+      } else if (!err.response) {
+        setServerError('Unable to connect to server. Please check connection or use offline cache.')
       } else if (err.response.status >= 500) {
         setServerError('Server error. Please try again later.')
       } else {
@@ -97,6 +103,7 @@ function AppContent() {
           </ProtectedRoute>
         } />
       </Routes>
+      <OfflineBanner />
     </div>
   )
 }

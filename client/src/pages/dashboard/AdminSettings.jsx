@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings, Save, Store, Copy, Check, Calendar, Bell } from 'lucide-react'
+import { Settings, Save, Store, Copy, Check, Calendar, Bell, Printer, Image, Trash2 } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
@@ -14,6 +14,12 @@ const AdminSettings = () => {
     shop_gstin: '09AAACK1234M1Z5',
     shop_license: 'FERT/DL/2024/481',
     upi_id: '',
+    shop_logo: '',
+    default_invoice_format: 'a4',
+    invoice_footer_note: 'Goods once sold cannot be returned without original batch tag. Subject to local jurisdiction.',
+    invoice_greeting: '🌾 Happy Farming & High Crop Yields! Visit Again. 🌱',
+    invoice_terms: 'Payment due on receipt. Interest applicable on delayed balances.',
+    show_qr_on_thermal: 'true',
     auto_reminder_enabled: 'true',
     auto_reminder_day: '1',
     auto_reminder_min_amount: '100',
@@ -23,6 +29,34 @@ const AdminSettings = () => {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showRemindersModal, setShowRemindersModal] = useState(false)
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 1024 * 1024 * 2) {
+      toast.error('Logo file size must be under 2MB')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      setShopProfile(prev => ({
+        ...prev,
+        shop_logo: reader.result
+      }))
+      toast.success('Shop logo loaded! Click "Save Settings" to apply.')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemoveLogo = () => {
+    setShopProfile(prev => ({
+      ...prev,
+      shop_logo: ''
+    }))
+    toast.success('Logo removed. Remember to Save Settings.')
+  }
 
   useEffect(() => {
     fetchSettings()
@@ -261,6 +295,122 @@ const AdminSettings = () => {
                   <option value="mr">🇮🇳 Marathi (मराठी)</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Receipt & Invoice Print Customization */}
+          <div className="pt-6 border-t border-gray-100 space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <Printer className="w-5 h-5 text-teal-600" />
+                Receipt &amp; Thermal Invoice Customization
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Customize shop logo, bill layout, greetings, terms, and thermal printer formatting
+              </p>
+            </div>
+
+            {/* Shop Logo Uploader */}
+            <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl">
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Image className="w-4 h-4 text-teal-600" /> Shop Logo / Header Branding
+              </label>
+              <div className="flex flex-wrap items-center gap-4">
+                {shopProfile.shop_logo ? (
+                  <div className="relative group p-2 bg-white rounded-xl border border-gray-300 shadow-sm flex items-center gap-3">
+                    <img
+                      src={shopProfile.shop_logo}
+                      alt="Shop Logo Preview"
+                      className="h-14 max-w-[160px] object-contain rounded"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                      title="Remove Logo"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <label className="cursor-pointer px-4 py-2 bg-white border border-dashed border-gray-300 hover:border-teal-500 rounded-xl text-xs font-bold text-gray-700 shadow-sm hover:bg-teal-50/50 transition flex items-center gap-2">
+                      <Image className="w-4 h-4 text-teal-600" />
+                      <span>Upload Logo Image</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLogoUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    <span className="text-xs text-gray-400">PNG, JPG, or SVG up to 2MB</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-2">
+                Logo renders automatically on both A4 official tax invoices and POS thermal receipts.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Default Invoice Format</label>
+                <select
+                  value={shopProfile.default_invoice_format}
+                  onChange={(e) => setShopProfile({ ...shopProfile, default_invoice_format: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+                >
+                  <option value="a4">📄 A4 Tax Invoice (Full Sheet)</option>
+                  <option value="thermal">🧾 80mm POS Thermal Slip (3-inch Desktop)</option>
+                  <option value="thermal_58">📱 58mm Mobile Bluetooth Slip (2-inch Field)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Show UPI QR on Thermal Slips</label>
+                <select
+                  value={shopProfile.show_qr_on_thermal}
+                  onChange={(e) => setShopProfile({ ...shopProfile, show_qr_on_thermal: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+                >
+                  <option value="true">✅ Yes, Print Dynamic UPI QR Code</option>
+                  <option value="false">⛔ No QR Code</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Invoice Greeting Message</label>
+                <input
+                  type="text"
+                  value={shopProfile.invoice_greeting}
+                  onChange={(e) => setShopProfile({ ...shopProfile, invoice_greeting: e.target.value })}
+                  placeholder="e.g. 🌾 Happy Farming & High Crop Yields! Visit Again. 🌱"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Credit Overdue Terms Notice</label>
+                <input
+                  type="text"
+                  value={shopProfile.invoice_terms}
+                  onChange={(e) => setShopProfile({ ...shopProfile, invoice_terms: e.target.value })}
+                  placeholder="e.g. Payment due on receipt. Interest @ 1.5% on delayed khata dues."
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Footer Legal Disclaimer &amp; Terms</label>
+              <textarea
+                rows="2"
+                value={shopProfile.invoice_footer_note}
+                onChange={(e) => setShopProfile({ ...shopProfile, invoice_footer_note: e.target.value })}
+                placeholder="e.g. Goods once sold cannot be returned without original batch tag. Subject to local jurisdiction."
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-teal-500 outline-none font-medium"
+              />
             </div>
           </div>
 

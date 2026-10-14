@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import api from '../../utils/api'
 import { useLanguage } from '../../contexts/LanguageContext'
 import PrintableInvoice from '../../components/sales/PrintableInvoice'
+import { getPendingOfflineSales, getCachedSettings } from '../../utils/offlineStorage'
 
 const SaleDetail = () => {
   const { t } = useLanguage()
@@ -22,6 +23,22 @@ const SaleDetail = () => {
   }, [id])
 
   const fetchSaleData = async () => {
+    // Check if viewing an offline sale
+    if (String(id).startsWith('offline-') || String(id).startsWith('off_')) {
+      const offlineInv = String(id).replace('offline-', '')
+      const pendingSales = getPendingOfflineSales()
+      const found = pendingSales.find(s => s.offline_invoice_number === offlineInv || s.id === id || s.offline_invoice_number === id)
+      if (found) {
+        setSale({
+          ...found,
+          id: found.offline_invoice_number
+        })
+        setShopSettings(getCachedSettings())
+        setLoading(false)
+        return
+      }
+    }
+
     try {
       setLoading(true)
       const [saleRes, settingsRes] = await Promise.all([
@@ -32,6 +49,16 @@ const SaleDetail = () => {
       setShopSettings(settingsRes.data || {})
     } catch (error) {
       console.error('Error fetching sale:', error)
+      const pendingSales = getPendingOfflineSales()
+      const found = pendingSales.find(s => String(s.id) === String(id) || s.offline_invoice_number === id)
+      if (found) {
+        setSale({
+          ...found,
+          id: found.offline_invoice_number
+        })
+        setShopSettings(getCachedSettings())
+        return
+      }
       toast.error(error.response?.data?.error || t('errorLoadingSale') || 'Error loading sale')
       navigate('/sales')
     } finally {

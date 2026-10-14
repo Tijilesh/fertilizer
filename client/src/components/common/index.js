@@ -12,3 +12,4 @@ export { default as CompatibilityRulesManager } from './CompatibilityRulesManage
 export { default as NotificationCenter } from './NotificationCenter'
 export { default as WhatsAppReminderModal } from './WhatsAppReminderModal'
 export { default as MonthlyRemindersModal } from '../farmers/MonthlyRemindersModal'
+export { default as OfflineBanner } from './OfflineBanner'
