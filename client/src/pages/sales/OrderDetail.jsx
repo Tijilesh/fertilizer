@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Package, MapPin, CreditCard, Truck, CheckCircle, Clock } from 'lucide-react'
+import { ArrowLeft, Package, MapPin, CreditCard, Truck, CheckCircle, Clock, Store } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
 
@@ -26,9 +26,19 @@ const OrderDetail = () => {
     }
   }
 
-  const getStatusInfo = (status, date) => {
+  const getStatusInfo = (status, date, purchaseType) => {
     const formattedDate = date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
     
+    if (purchaseType === 'in-store') {
+      return { 
+        icon: <Store className="w-8 h-8 text-emerald-600" />, 
+        text: 'In-Store Purchase Completed', 
+        color: 'text-emerald-700', 
+        bg: 'bg-emerald-50', 
+        border: 'border-emerald-200' 
+      }
+    }
+
     switch (status) {
       case 'delivered':
         return { icon: <CheckCircle className="w-8 h-8 text-green-500" />, text: 'Delivered', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' }
@@ -63,7 +73,8 @@ const OrderDetail = () => {
     )
   }
 
-  const statusInfo = getStatusInfo(order.status, order.created_at)
+  const isWalkIn = order.purchase_type === 'in-store'
+  const statusInfo = getStatusInfo(order.status, order.created_at, order.purchase_type)
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -77,9 +88,22 @@ const OrderDetail = () => {
       {/* Header section */}
       <div className="glass-card bg-white rounded-[2rem] p-8 shadow-xl shadow-gray-200/50 border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Order Details</h1>
-          <p className="text-gray-500 mt-1 font-medium">Order #{order.order_number}</p>
-          <p className="text-sm text-gray-400 font-bold mt-2">Placed on {new Date(order.created_at).toLocaleString()}</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+              {isWalkIn ? 'Store Purchase Receipt' : 'Order Details'}
+            </h1>
+            {isWalkIn && (
+              <span className="bg-emerald-100 text-emerald-800 text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1.5">
+                <Store className="w-3.5 h-3.5" /> Walk-In Purchase
+              </span>
+            )}
+          </div>
+          <p className="text-gray-500 mt-1 font-medium">
+            {isWalkIn ? `In-Store Receipt #REC-${order.id}` : `Order #${order.order_number}`}
+          </p>
+          <p className="text-sm text-gray-400 font-bold mt-2">
+            {isWalkIn ? 'Purchased on' : 'Placed on'} {new Date(order.created_at).toLocaleString()}
+          </p>
         </div>
         <div className={`flex items-center gap-4 px-6 py-4 rounded-2xl border ${statusInfo.bg} ${statusInfo.border}`}>
           {statusInfo.icon}
@@ -95,7 +119,7 @@ const OrderDetail = () => {
         <div className="lg:col-span-2 space-y-6">
           <div className="glass-card bg-white rounded-[2rem] p-8 shadow-xl shadow-gray-200/50 border border-gray-100">
             <h2 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
-              <Package className="w-6 h-6 text-primary-600" /> Items in this Order
+              <Package className="w-6 h-6 text-primary-600" /> Items in this {isWalkIn ? 'Purchase' : 'Order'}
             </h2>
             
             <div className="space-y-6">
@@ -182,9 +206,19 @@ const OrderDetail = () => {
         <div className="space-y-6">
           <div className="glass-card bg-white rounded-[2rem] p-6 shadow-xl shadow-gray-200/50 border border-gray-100">
             <h3 className="font-black text-gray-900 mb-4 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-primary-600" /> Shipping Address
+              {isWalkIn ? <Store className="w-5 h-5 text-emerald-600" /> : <MapPin className="w-5 h-5 text-primary-600" />} 
+              {isWalkIn ? 'Store Counter Fulfillment' : 'Shipping Address'}
             </h3>
-            {order.shipping_address ? (
+            {isWalkIn ? (
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 font-black text-xs border border-emerald-200">
+                  <CheckCircle className="w-3.5 h-3.5" /> Handed over at store counter
+                </div>
+                <p className="text-gray-600 font-medium text-sm leading-relaxed">
+                  Direct physical purchase and pickup completed at shop premises.
+                </p>
+              </div>
+            ) : order.shipping_address ? (
               <p className="text-gray-600 font-medium leading-relaxed">{order.shipping_address}</p>
             ) : (
               <p className="text-gray-400 italic">No shipping address provided</p>

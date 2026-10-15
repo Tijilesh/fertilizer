@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronRight, Package, Truck, CheckCircle, Clock, Filter } from 'lucide-react'
+import { Search, ChevronRight, Package, Truck, CheckCircle, Clock, Filter, Store, ShoppingBag } from 'lucide-react'
 import api from '../../utils/api'
 import { useLanguage } from '../../contexts/LanguageContext'
 import toast from 'react-hot-toast'
@@ -49,32 +49,45 @@ const OrderHistory = () => {
     })
   }, [orders, searchQuery, statusFilter])
 
-  const getStatusDisplay = (status, date) => {
+  const getStatusDisplay = (status, date, purchaseType, paymentMethod) => {
     const formattedDate = date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
     
+    if (purchaseType === 'in-store') {
+      return {
+        icon: <div className="w-3 h-3 rounded-full bg-emerald-500 mr-2 shadow-sm shadow-emerald-500/50" />,
+        badgeIcon: <Store className="w-3.5 h-3.5 text-emerald-600" />,
+        title: `Purchased in Store on ${formattedDate}`,
+        subtitle: `Counter Sale Handover • Paid via ${(paymentMethod || 'Cash').toUpperCase()}`
+      }
+    }
+
     switch (status) {
       case 'delivered':
         return {
           icon: <div className="w-3 h-3 rounded-full bg-green-500 mr-2" />,
+          badgeIcon: <Package className="w-3.5 h-3.5 text-green-600" />,
           title: `Delivered on ${formattedDate}`,
           subtitle: 'Your item has been delivered'
         }
       case 'shipped':
         return {
           icon: <div className="w-3 h-3 rounded-full bg-blue-500 mr-2" />,
+          badgeIcon: <Truck className="w-3.5 h-3.5 text-blue-600" />,
           title: `Expected by ${formattedDate}`,
           subtitle: 'Your item has been shipped'
         }
       case 'processing':
         return {
           icon: <div className="w-3 h-3 rounded-full bg-orange-500 mr-2" />,
+          badgeIcon: <Clock className="w-3.5 h-3.5 text-orange-600" />,
           title: `Ordered on ${formattedDate}`,
           subtitle: 'Seller is processing your order'
         }
       default:
         return {
           icon: <div className="w-3 h-3 rounded-full bg-gray-500 mr-2" />,
-          title: status.charAt(0).toUpperCase() + status.slice(1),
+          badgeIcon: <Package className="w-3.5 h-3.5 text-gray-600" />,
+          title: status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Order Placed',
           subtitle: 'Order update available'
         }
     }
@@ -151,17 +164,33 @@ const OrderHistory = () => {
             filteredOrders.map((order) => {
               const primaryItem = order.items && order.items.length > 0 ? order.items[0] : null
               const additionalItemsCount = order.items ? order.items.length - 1 : 0
-              const statusInfo = getStatusDisplay(order.status, order.created_at)
+              const isWalkIn = order.purchase_type === 'in-store'
+              const statusInfo = getStatusDisplay(order.status, order.created_at, order.purchase_type, order.payment_method)
 
               return (
                 <div 
                   key={order.id} 
                   onClick={() => navigate(`/orders/${order.id}`)}
-                  className="glass-card bg-white rounded-[2rem] p-5 shadow-xl shadow-gray-200/50 border-2 border-transparent hover:border-primary-100 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col md:flex-row gap-6 items-center group"
+                  className={`glass-card bg-white rounded-[2rem] p-5 shadow-xl shadow-gray-200/50 border-2 ${isWalkIn ? 'border-emerald-100 hover:border-emerald-300' : 'border-transparent hover:border-primary-100'} hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col md:flex-row gap-6 items-center group relative overflow-hidden`}
                 >
-                  {/* Product Image Placeholder */}
-                  <div className="w-28 h-28 bg-gradient-to-br from-gray-50 to-gray-100 flex-shrink-0 flex items-center justify-center rounded-3xl overflow-hidden shadow-inner group-hover:scale-105 transition-transform duration-500">
-                     <Package className="w-12 h-12 text-gray-300 group-hover:text-primary-400 transition-colors" />
+                  {/* In-Store Indicator Corner Ribbon/Accent */}
+                  {isWalkIn && (
+                    <div className="absolute top-0 right-0 bg-gradient-to-l from-emerald-500 to-teal-600 text-white text-[9px] font-black uppercase tracking-widest px-4 py-1 rounded-bl-xl flex items-center gap-1.5 shadow-sm">
+                      <Store className="w-3 h-3" />
+                      <span>Walk-In Store Purchase</span>
+                    </div>
+                  )}
+
+                  {/* Product Image Placeholder / Store Icon */}
+                  <div className={`w-28 h-28 ${isWalkIn ? 'bg-gradient-to-br from-emerald-50 to-teal-100/60' : 'bg-gradient-to-br from-gray-50 to-gray-100'} flex-shrink-0 flex items-center justify-center rounded-3xl overflow-hidden shadow-inner group-hover:scale-105 transition-transform duration-500`}>
+                     {isWalkIn ? (
+                       <div className="flex flex-col items-center justify-center text-emerald-600">
+                         <Store className="w-10 h-10 mb-1" />
+                         <span className="text-[9px] font-black tracking-wider uppercase text-emerald-700 bg-white/70 px-2 py-0.5 rounded-full">In-Store</span>
+                       </div>
+                     ) : (
+                       <Package className="w-12 h-12 text-gray-300 group-hover:text-primary-400 transition-colors" />
+                     )}
                   </div>
 
                   {/* Product Details */}
@@ -177,13 +206,21 @@ const OrderHistory = () => {
                         ))
                       ) : (
                         <h3 className="text-lg text-gray-900 font-black truncate group-hover:text-primary-600 transition-colors leading-tight">
-                          Order #{order.order_number}
+                          {isWalkIn ? `In-Store Receipt #${order.id}` : `Order #${order.order_number}`}
                         </h3>
                       )}
                     </div>
-                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-3 pt-3 border-t border-gray-100">
-                      {order.purchase_type === 'in-store' ? `In-Store Receipt: #REC-${order.id}` : `Order ID: ${order.order_number || `ORD-${order.id}`}`}
-                    </p>
+                    
+                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 flex-wrap">
+                      <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md ${isWalkIn ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'}`}>
+                        {isWalkIn ? `In-Store Receipt: #REC-${order.id}` : `Order ID: ${order.order_number || `ORD-${order.id}`}`}
+                      </span>
+                      {isWalkIn && (
+                        <span className="text-[10px] font-bold text-gray-400">
+                          • Walk-in Counter Sale
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Price */}
@@ -194,8 +231,8 @@ const OrderHistory = () => {
                     </span>
                   </div>
 
-                  {/* Delivery Status */}
-                  <div className="w-full md:w-64 flex-shrink-0 bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
+                  {/* Delivery / In-Store Status */}
+                  <div className={`w-full md:w-64 flex-shrink-0 p-4 rounded-2xl border ${isWalkIn ? 'bg-emerald-50/50 border-emerald-100' : 'bg-gray-50/50 border-gray-100'}`}>
                     <div className="flex items-center font-black text-sm text-gray-900 mb-1 tracking-tight">
                       {statusInfo.icon}
                       {statusInfo.title}
