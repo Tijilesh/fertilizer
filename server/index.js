@@ -2547,11 +2547,12 @@ app.post('/api/auth/register', async (req, res) => {
       assignedShopId = shopResult.insertId;
       assignedShopSlug = uniqueSlug;
 
-      // Seed shop settings with registered shop name and phone
+      // Seed shop settings with registered shop name, phone and default UPI ID
       try {
+        const defaultUpi = phone ? `${phone.replace(/\D/g, '')}@ybl` : 'farmerpay@upi';
         await db.execute(
-          'INSERT INTO shop_settings (shop_id, setting_key, setting_value) VALUES (?, ?, ?), (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
-          [assignedShopId, 'shop_name', shop_name, assignedShopId, 'shop_phone', phone || '']
+          'INSERT INTO shop_settings (shop_id, setting_key, setting_value) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
+          [assignedShopId, 'shop_name', shop_name, assignedShopId, 'shop_phone', phone || '', assignedShopId, 'upi_id', defaultUpi]
         );
       } catch (err) {
         console.error('Failed to seed default shop_settings:', err.message);

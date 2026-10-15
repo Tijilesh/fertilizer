@@ -45,6 +45,7 @@ const Cart = () => {
   const [utrNumber, setUtrNumber] = useState('')
 
   const isAdmin = user?.role === 'owner' || user?.role === 'admin'
+  const effectiveUpiId = shopUpiId || (user?.phone ? `${user.phone.replace(/\D/g, '')}@ybl` : '9014397974@ybl')
 
   // Simulate initial network fetch for skeleton loader
   useEffect(() => {
@@ -624,9 +625,19 @@ const Cart = () => {
                 <p className="text-gray-500 font-medium mb-4">
                   Scan the QR code below to pay <span className="font-bold text-gray-900">₹{finalPayable.toFixed(2)}</span>
                 </p>
-                {shopUpiId ? (
-                  <div className="flex justify-center bg-gray-50 p-4 rounded-2xl border-2 border-dashed border-gray-200 inline-block mx-auto">
-                    <QRCodeSVG value={`upi://pay?pa=${shopUpiId}&pn=Fertilizer%20Shop&am=${finalPayable.toFixed(2)}&cu=INR`} size={200} />
+                {effectiveUpiId ? (
+                  <div className="flex flex-col items-center">
+                    <div className="flex justify-center bg-white p-4 rounded-2xl border-2 border-emerald-200 shadow-md inline-block mx-auto mb-3">
+                      <QRCodeSVG 
+                        value={`upi://pay?pa=${effectiveUpiId}&pn=${encodeURIComponent(user?.shop_name || 'Fertilizer Shop')}&am=${finalPayable.toFixed(2)}&cu=INR`} 
+                        size={210} 
+                        level="M"
+                        includeMargin={true}
+                      />
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 rounded-full text-xs font-mono font-bold border border-emerald-200">
+                      <span>UPI ID:</span> {effectiveUpiId}
+                    </div>
                   </div>
                 ) : (
                   <div className="p-4 bg-yellow-50 text-yellow-700 rounded-lg text-sm font-medium">
@@ -635,7 +646,7 @@ const Cart = () => {
                 )}
               </div>
               
-              {shopUpiId && (
+              {effectiveUpiId && (
                 <div className="space-y-2 text-left mt-4">
                   <label className="block text-sm font-bold text-gray-700">Enter 12-digit UTR Number *</label>
                   <input
@@ -644,21 +655,21 @@ const Cart = () => {
                     value={utrNumber}
                     onChange={(e) => setUtrNumber(e.target.value.replace(/\D/g, ''))}
                     placeholder="e.g., 312345678901"
-                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all font-medium placeholder:font-normal"
+                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all font-medium placeholder:font-normal font-mono"
                   />
-                  <p className="text-xs text-gray-500">Find this in your payment app (GPay, PhonePe) after paying.</p>
+                  <p className="text-xs text-gray-500">Find this in your payment app (GPay, PhonePe, Paytm) after completing payment.</p>
                 </div>
               )}
 
               <button
                 onClick={() => {
-                  if (shopUpiId && utrNumber.length !== 12) {
+                  if (effectiveUpiId && utrNumber.length !== 12) {
                     toast.error('Please enter a valid 12-digit UTR number')
                     return
                   }
                   executeOrder()
                 }}
-                disabled={loading || (shopUpiId && utrNumber.length !== 12)}
+                disabled={loading || (effectiveUpiId && utrNumber.length !== 12)}
                 className="w-full bg-primary-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-primary-700 transition-all shadow-xl shadow-primary-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading && <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
