@@ -1,13 +1,55 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, Upload, FileSpreadsheet } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
 import api from '../../utils/api'
 import { useLanguage } from '../../contexts/LanguageContext'
+import SmartProductImportModal from '../../components/inventory/SmartProductImportModal'
 
 const AddProduct = ({ onSuccess }) => {
   const { t } = useLanguage()
   const navigate = useNavigate()
+  const fileInputRef = useRef(null)
+
+  // Smart Import Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+  const [rawImportData, setRawImportData] = useState([])
+  const [fileHeaders, setFileHeaders] = useState([])
+  const [importFileName, setImportFileName] = useState('')
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setImportFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+        if (!data || data.length === 0) {
+          toast.error('The selected file has no data rows.');
+          return;
+        }
+
+        const headers = Array.from(new Set(data.flatMap(row => Object.keys(row))));
+        setRawImportData(data);
+        setFileHeaders(headers);
+        setIsImportModalOpen(true);
+      } catch (err) {
+        console.error('Error reading spreadsheet file:', err);
+        toast.error('Failed to read file. Please ensure it is a valid Excel (.xlsx/.xls) or CSV file.');
+      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsBinaryString(file);
+  }
+
   const [formData, setFormData] = useState({
     name: '',
     type: '',
@@ -60,7 +102,30 @@ const AddProduct = ({ onSuccess }) => {
       </div>
 
       <div className="glass-card premium-shadow p-10 rounded-3xl border border-white/20">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8 tracking-tight">{t('addNewProduct')}</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 mb-8 border-b border-gray-100 gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">{t('addNewProduct')}</h1>
+            <p className="text-xs text-gray-500 mt-1">Add single product or upload any company Excel / CSV catalog</p>
+          </div>
+          <div>
+            <input 
+              type="file" 
+              accept=".xlsx, .xls, .csv" 
+              className="hidden" 
+              ref={fileInputRef} 
+              onChange={handleFileUpload} 
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl font-bold text-xs flex items-center space-x-2 transition shadow-sm"
+              title="Upload file from any company (IFFCO, Bayer, Coromandel, etc.)"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Import Company File</span>
+            </button>
+          </div>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -191,6 +256,19 @@ const AddProduct = ({ onSuccess }) => {
           </div>
         </form>
       </div>
+
+      {/* Universal Multi-Company Product Import Modal */}
+      <SmartProductImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        rawData={rawImportData}
+        fileHeaders={fileHeaders}
+        fileName={importFileName}
+        onImportSuccess={() => {
+          if (onSuccess) onSuccess()
+          navigate('/products')
+        }}
+      />
     </div>
   )
 }

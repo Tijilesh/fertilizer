@@ -68,6 +68,8 @@ const AdminSettings = () => {
       if (res.data) {
         setShopProfile(prev => ({
           ...prev,
+          shop_name: res.data.shop_name || user?.shop_name || prev.shop_name,
+          shop_phone: res.data.shop_phone || user?.phone || prev.shop_phone,
           ...res.data
         }))
       }

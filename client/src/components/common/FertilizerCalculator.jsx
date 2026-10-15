@@ -1,65 +1,62 @@
 import { useState } from 'react'
-import { Calculator, Beaker, Leaf, Target, Brain, Sprout } from 'lucide-react'
+import { Calculator, Beaker, Leaf, Target, Brain, Sprout, Sparkles, CheckCircle2, RotateCcw, AlertCircle, ShoppingBag, ArrowRight } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
+import toast from 'react-hot-toast'
 
 const FertilizerCalculator = () => {
   const { t } = useLanguage()
   const [formData, setFormData] = useState({
-    season: '',
+    season: 'all',
     cropType: '',
-    area: '',
+    area: '1',
     areaUnit: 'acres',
-    soilType: '',
+    soilType: 'loamy',
+    phLevel: '6.5',
     currentNPK: { n: '', p: '', k: '' }
   })
   const [result, setResult] = useState(null)
 
   const seasons = [
-    { value: 'kharif', label: 'Kharif (Monsoon)', months: 'June-October' },
-    { value: 'rabi', label: 'Rabi (Winter)', months: 'October-March' },
-    { value: 'zaid', label: 'Zaid (Summer)', months: 'March-June' }
+    { value: 'all', label: 'All Seasons / General', months: 'Year-Round' },
+    { value: 'kharif', label: 'Kharif (Monsoon)', months: 'June - Oct' },
+    { value: 'rabi', label: 'Rabi (Winter)', months: 'Oct - March' },
+    { value: 'zaid', label: 'Zaid (Summer)', months: 'March - June' }
   ]
 
   const allCropTypes = [
-    // Kharif crops (Monsoon season)
-    { value: 'rice', label: 'Rice (Paddy)', season: 'kharif', npk: { n: 120, p: 60, k: 40 } },
-    { value: 'maize', label: 'Maize (Corn)', season: 'kharif', npk: { n: 150, p: 75, k: 50 } },
-    { value: 'cotton', label: 'Cotton', season: 'kharif', npk: { n: 100, p: 50, k: 50 } },
-    { value: 'sugarcane', label: 'Sugarcane', season: 'kharif', npk: { n: 250, p: 100, k: 150 } },
-    { value: 'soybean', label: 'Soybean', season: 'kharif', npk: { n: 20, p: 60, k: 20 } },
-    { value: 'groundnut', label: 'Groundnut', season: 'kharif', npk: { n: 20, p: 40, k: 0 } },
+    // Staple & Cash Crops
+    { value: 'rice', label: 'Rice (Paddy)', category: 'Cereals', season: 'kharif', npk: { n: 120, p: 60, k: 40 }, duration: '120-150 days' },
+    { value: 'wheat', label: 'Wheat', category: 'Cereals', season: 'rabi', npk: { n: 120, p: 60, k: 40 }, duration: '110-130 days' },
+    { value: 'maize', label: 'Maize (Corn)', category: 'Cereals', season: 'kharif', npk: { n: 150, p: 75, k: 50 }, duration: '90-110 days' },
+    { value: 'cotton', label: 'Cotton', category: 'Fiber', season: 'kharif', npk: { n: 120, p: 60, k: 60 }, duration: '150-180 days' },
+    { value: 'sugarcane', label: 'Sugarcane', category: 'Commercial', season: 'kharif', npk: { n: 250, p: 100, k: 120 }, duration: '300-360 days' },
+    { value: 'chilli', label: 'Chilli / Pepper', category: 'Spices', season: 'kharif', npk: { n: 120, p: 60, k: 60 }, duration: '150-180 days' },
+    
+    // Pulses & Oilseeds
+    { value: 'soybean', label: 'Soybean', category: 'Pulses', season: 'kharif', npk: { n: 30, p: 60, k: 40 }, duration: '90-105 days' },
+    { value: 'groundnut', label: 'Groundnut', category: 'Oilseeds', season: 'kharif', npk: { n: 25, p: 50, k: 40 }, duration: '105-120 days' },
+    { value: 'mustard', label: 'Mustard', category: 'Oilseeds', season: 'rabi', npk: { n: 80, p: 40, k: 40 }, duration: '90-110 days' },
+    { value: 'bengalgram', label: 'Bengal Gram (Chana)', category: 'Pulses', season: 'rabi', npk: { n: 25, p: 50, k: 25 }, duration: '90-110 days' },
 
-    // Rabi crops (Winter season)
-    { value: 'wheat', label: 'Wheat', season: 'rabi', npk: { n: 120, p: 60, k: 40 } },
-    { value: 'barley', label: 'Barley', season: 'rabi', npk: { n: 80, p: 40, k: 20 } },
-    { value: 'mustard', label: 'Mustard', season: 'rabi', npk: { n: 80, p: 40, k: 20 } },
-    { value: 'peas', label: 'Peas', season: 'rabi', npk: { n: 25, p: 50, k: 25 } },
-
-    // Zaid crops (Summer season)
-    { value: 'potato', label: 'Potato', season: 'zaid', npk: { n: 150, p: 100, k: 150 } },
-    { value: 'tomato', label: 'Tomato', season: 'zaid', npk: { n: 100, p: 50, k: 100 } },
-    { value: 'onion', label: 'Onion', season: 'zaid', npk: { n: 100, p: 50, k: 50 } },
-    { value: 'cucumber', label: 'Cucumber', season: 'zaid', npk: { n: 80, p: 40, k: 60 } },
-    { value: 'watermelon', label: 'Watermelon', season: 'zaid', npk: { n: 80, p: 40, k: 60 } }
+    // Vegetables & Fruits
+    { value: 'tomato', label: 'Tomato', category: 'Vegetables', season: 'zaid', npk: { n: 120, p: 80, k: 100 }, duration: '100-120 days' },
+    { value: 'onion', label: 'Onion', category: 'Vegetables', season: 'rabi', npk: { n: 100, p: 50, k: 80 }, duration: '120-140 days' },
+    { value: 'potato', label: 'Potato', category: 'Vegetables', season: 'rabi', npk: { n: 150, p: 100, k: 120 }, duration: '90-110 days' },
+    { value: 'watermelon', label: 'Watermelon', category: 'Fruits', season: 'zaid', npk: { n: 100, p: 50, k: 80 }, duration: '80-100 days' },
+    { value: 'banana', label: 'Banana', category: 'Fruits', season: 'all', npk: { n: 200, p: 60, k: 300 }, duration: '300-365 days' }
   ]
 
-  // Filter crops based on selected season
-  const cropTypes = formData.season ? allCropTypes.filter(crop => crop.season === formData.season) : []
+  // Filter crops based on season, or show all if 'all' is selected
+  const cropTypes = formData.season === 'all' 
+    ? allCropTypes 
+    : allCropTypes.filter(crop => crop.season === formData.season || crop.season === 'all')
 
   const soilTypes = [
-    { value: 'sandy', label: 'Sandy Soil', factor: 1.2 },
-    { value: 'loamy', label: 'Loamy Soil', factor: 1.0 },
-    { value: 'clay', label: 'Clay Soil', factor: 0.8 },
-    { value: 'silt', label: 'Silt Soil', factor: 0.9 }
-  ]
-
-  const fertilizers = [
-    { name: 'Urea (46% N)', n: 46, p: 0, k: 0, price: 300 },
-    { name: 'DAP (18% N, 46% P)', n: 18, p: 46, k: 0, price: 1200 },
-    { name: 'MOP (60% K)', n: 0, p: 0, k: 60, price: 1800 },
-    { name: 'NPK 10-26-26', n: 10, p: 26, k: 26, price: 1400 },
-    { name: 'NPK 12-32-16', n: 12, p: 32, k: 16, price: 1500 },
-    { name: 'NPK 20-20-20', n: 20, p: 20, k: 20, price: 1600 }
+    { value: 'loamy', label: 'Loamy Soil (Ideal Retention)', factor: 1.0, desc: 'Balanced nutrient availability' },
+    { value: 'black', label: 'Black Cotton Soil (High Clay)', factor: 0.85, desc: 'High fertility, retain moisture well' },
+    { value: 'sandy', label: 'Sandy / Light Soil', factor: 1.25, desc: 'High leaching; needs split dosages' },
+    { value: 'red', label: 'Red / Laterite Soil', factor: 1.1, desc: 'Low in Nitrogen and Phosphorus' },
+    { value: 'clay', label: 'Heavy Clay Soil', factor: 0.9, desc: 'Slow release, avoid waterlogging' }
   ]
 
   const handleInputChange = (field, value) => {
@@ -80,298 +77,420 @@ const FertilizerCalculator = () => {
   }
 
   const calculateFertilizer = () => {
-    const selectedCrop = cropTypes.find(crop => crop.value === formData.cropType)
-    const selectedSoil = soilTypes.find(soil => soil.value === formData.soilType)
-    const selectedSeason = seasons.find(season => season.value === formData.season)
+    if (!formData.cropType) {
+      toast.error('Please choose a crop type first')
+      return
+    }
+    const numArea = parseFloat(formData.area)
+    if (!numArea || numArea <= 0) {
+      toast.error('Please enter a valid farm land area')
+      return
+    }
 
-    if (!selectedCrop || !selectedSoil || !selectedSeason || !formData.area) return
+    const selectedCrop = allCropTypes.find(crop => crop.value === formData.cropType)
+    const selectedSoil = soilTypes.find(soil => soil.value === formData.soilType) || soilTypes[0]
 
-    const areaInHectares = formData.areaUnit === 'acres' ? formData.area * 0.4047 : formData.area
+    if (!selectedCrop) return
+
+    // Convert area to hectares (1 Acre = 0.404686 Hectare)
+    const areaInHectares = formData.areaUnit === 'acres' ? numArea * 0.404686 : numArea
 
     // Seasonal adjustment factors
     const seasonalFactors = {
-      kharif: { n: 1.2, p: 1.1, k: 1.0 }, // Higher N during monsoon
-      rabi: { n: 0.9, p: 1.0, k: 0.8 },   // Lower nutrients in winter
-      zaid: { n: 1.1, p: 1.2, k: 1.1 }    // Balanced for summer
+      all: { n: 1.0, p: 1.0, k: 1.0 },
+      kharif: { n: 1.15, p: 1.05, k: 1.0 }, // Rain leaching compensation
+      rabi: { n: 0.95, p: 1.0, k: 0.95 },   // Stable winter assimilation
+      zaid: { n: 1.05, p: 1.1, k: 1.05 }    // High transpiration demand
     }
+    const seasonFactor = seasonalFactors[formData.season] || seasonalFactors.all
 
-    const seasonFactor = seasonalFactors[formData.season]
-
-    // Calculate required NPK per hectare with seasonal and soil adjustments
+    // Target NPK per hectare
     const baseNPK = selectedCrop.npk
-    const requiredNPK = {
-      n: baseNPK.n * selectedSoil.factor * seasonFactor.n,
-      p: baseNPK.p * selectedSoil.factor * seasonFactor.p,
-      k: baseNPK.k * selectedSoil.factor * seasonFactor.k
+    const requiredNPKPerHa = {
+      n: Math.round(baseNPK.n * selectedSoil.factor * seasonFactor.n),
+      p: Math.round(baseNPK.p * selectedSoil.factor * seasonFactor.p),
+      k: Math.round(baseNPK.k * selectedSoil.factor * seasonFactor.k)
     }
 
-    // Subtract current soil NPK
-    const currentN = parseFloat(formData.currentNPK.n) || 0
-    const currentP = parseFloat(formData.currentNPK.p) || 0
-    const currentK = parseFloat(formData.currentNPK.k) || 0
-
-    const neededNPK = {
-      n: Math.max(0, requiredNPK.n - currentN),
-      p: Math.max(0, requiredNPK.p - currentP),
-      k: Math.max(0, requiredNPK.k - currentK)
+    // Total required for farmer's entire field
+    const fieldRequiredNPK = {
+      n: Math.round(requiredNPKPerHa.n * areaInHectares),
+      p: Math.round(requiredNPKPerHa.p * areaInHectares),
+      k: Math.round(requiredNPKPerHa.k * areaInHectares)
     }
 
-    // Calculate fertilizer requirements
-    const recommendations = fertilizers.map(fert => {
-      const nNeeded = neededNPK.n * areaInHectares
-      const pNeeded = neededNPK.p * areaInHectares
-      const kNeeded = neededNPK.k * areaInHectares
+    // Subtract existing soil test values if entered
+    const currentN = (parseFloat(formData.currentNPK.n) || 0) * areaInHectares
+    const currentP = (parseFloat(formData.currentNPK.p) || 0) * areaInHectares
+    const currentK = (parseFloat(formData.currentNPK.k) || 0) * areaInHectares
 
-      let quantity = 0
-      if (fert.n > 0) quantity = Math.max(quantity, nNeeded / (fert.n / 100))
-      if (fert.p > 0) quantity = Math.max(quantity, pNeeded / (fert.p / 100))
-      if (fert.k > 0) quantity = Math.max(quantity, kNeeded / (fert.k / 100))
+    const netNutrientsNeeded = {
+      n: Math.max(0, fieldRequiredNPK.n - currentN),
+      p: Math.max(0, fieldRequiredNPK.p - currentP),
+      k: Math.max(0, fieldRequiredNPK.k - currentK)
+    }
 
-      return {
-        ...fert,
-        quantity: Math.ceil(quantity),
-        cost: Math.ceil(quantity) * fert.price
+    // ── Agronomic Science Combination Calculator ──
+    // Standard Commercial Bags are 50kg (Urea is 45kg bag by Govt subsidy)
+    // 1 bag DAP (50kg) contains 9kg N + 23kg P2O5
+    // 1 bag MOP (50kg) contains 30kg K2O
+    // 1 bag Urea (45kg) contains 20.7kg N (46%)
+
+    // Step 1: Supply all Phosphorus using DAP
+    const dapBags = Math.ceil(netNutrientsNeeded.p / 23)
+    const nSuppliedByDap = dapBags * 9
+
+    // Step 2: Supply remaining Nitrogen using Neem Coated Urea
+    const remainingNNeeded = Math.max(0, netNutrientsNeeded.n - nSuppliedByDap)
+    const ureaBags = Math.ceil(remainingNNeeded / 20.7)
+
+    // Step 3: Supply all Potassium using MOP (Muriate of Potash)
+    const mopBags = Math.ceil(netNutrientsNeeded.k / 30)
+
+    const standardPlan = [
+      {
+        name: 'Neem Coated Urea (45kg)',
+        nutrientDetail: '46% Nitrogen (N)',
+        bags: ureaBags,
+        pricePerBag: 266.50,
+        stage: 'Split into Basal (33%) + 2 Top Dressings (33% each at Tillering & Panicle)',
+        badge: 'Nitrogen Booster'
+      },
+      {
+        name: 'DAP - Diammonium Phosphate (50kg)',
+        nutrientDetail: '18% N + 46% P₂O₅',
+        bags: dapBags,
+        pricePerBag: 1350.00,
+        stage: '100% at Sowing / Basal Application (Deep root zone placement)',
+        badge: 'Root & Shoot Strength'
+      },
+      {
+        name: 'MOP - Muriate of Potash (50kg)',
+        nutrientDetail: '60% K₂O',
+        bags: mopBags,
+        pricePerBag: 1700.00,
+        stage: '50% Basal + 50% at Flowering / Grain Filling stage',
+        badge: 'Disease & Yield Quality'
       }
-    }).filter(rec => rec.quantity > 0)
+    ].filter(item => item.bags > 0)
+
+    const totalEstimatedCost = standardPlan.reduce((sum, item) => sum + (item.bags * item.pricePerBag), 0)
+
+    // Bio & Organic Soil Conditioner recommendation
+    const compostTonnes = Math.round(areaInHectares * 2.5 * 10) / 10
+    const zincKg = Math.round(numArea * 5)
 
     setResult({
-      requiredNPK,
-      neededNPK,
+      selectedCrop,
+      selectedSoil,
       areaInHectares,
-      recommendations
+      requiredNPKPerHa,
+      fieldRequiredNPK,
+      netNutrientsNeeded,
+      standardPlan,
+      totalEstimatedCost,
+      compostTonnes,
+      zincKg
     })
+
+    toast.success('Soil nutrients & fertilizer schedule generated!')
   }
 
   const resetCalculator = () => {
     setFormData({
-      season: '',
+      season: 'all',
       cropType: '',
-      area: '',
+      area: '1',
       areaUnit: 'acres',
-      soilType: '',
+      soilType: 'loamy',
+      phLevel: '6.5',
       currentNPK: { n: '', p: '', k: '' }
     })
     setResult(null)
   }
 
   return (
-    <div className="bg-gradient-to-br from-emerald-50 to-green-50 p-6 rounded-lg border border-emerald-200">
-      <div className="flex items-center space-x-2 mb-6">
-        <Sprout className="w-6 h-6 text-emerald-600" />
-        <h3 className="text-lg font-bold text-gray-900">{t('soilHealth') || 'Soil Health'} & {t('fertilizerCalculator') || 'Fertilizer Calculator'}</h3>
-      </div>
-
-      <div className="space-y-6">
-        {/* Season Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            🌱 Select Season
-          </label>
-          <select
-            value={formData.season}
-            onChange={(e) => handleInputChange('season', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-          >
-            <option value="">Choose Season</option>
-            {seasons.map(season => (
-              <option key={season.value} value={season.value}>
-                {season.label} ({season.months})
-              </option>
-            ))}
-          </select>
-        </div>
-        {/* Crop Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            🌾 Select Crop Type
-          </label>
-          <select
-            value={formData.cropType}
-            onChange={(e) => handleInputChange('cropType', e.target.value)}
-            disabled={!formData.season}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
-            <option value="">
-              {formData.season ? 'Choose Crop' : 'Select season first'}
-            </option>
-            {cropTypes.map(crop => (
-              <option key={crop.value} value={crop.value}>
-                {crop.label} (N:{crop.npk.n} P:{crop.npk.p} K:{crop.npk.k})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Area Input */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t('landArea')}
-            </label>
-            <input
-              type="number"
-              value={formData.area}
-              onChange={(e) => handleInputChange('area', e.target.value)}
-              placeholder={t('enterArea')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t('unit')}
-            </label>
-            <select
-              value={formData.areaUnit}
-              onChange={(e) => handleInputChange('areaUnit', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="acres">{t('acres')}</option>
-              <option value="hectares">{t('hectares')}</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Soil Type */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {t('soilType')}
-          </label>
-          <select
-            value={formData.soilType}
-            onChange={(e) => handleInputChange('soilType', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">{t('chooseSoilType')}</option>
-            {soilTypes.map(soil => (
-              <option key={soil.value} value={soil.value}>
-                {soil.value === 'sandy' ? t('sandySoil') :
-                 soil.value === 'loamy' ? t('loamySoil') :
-                 soil.value === 'clay' ? t('claySoil') :
-                 t('siltSoil')}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Current Soil NPK */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {t('currentSoilNPKLevels')}
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            <input
-              type="number"
-              placeholder="N"
-              value={formData.currentNPK.n}
-              onChange={(e) => handleNPKChange('currentNPK', 'n', e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <input
-              type="number"
-              placeholder="P"
-              value={formData.currentNPK.p}
-              onChange={(e) => handleNPKChange('currentNPK', 'p', e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <input
-              type="number"
-              placeholder="K"
-              value={formData.currentNPK.k}
-              onChange={(e) => handleNPKChange('currentNPK', 'k', e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        {/* Calculate Button */}
-        <button
-          onClick={calculateFertilizer}
-          disabled={!formData.season || !formData.cropType || !formData.area || !formData.soilType}
-          className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg hover:bg-emerald-700 transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Brain className="w-5 h-5" />
-          <span>Get AI Fertilizer Recommendations</span>
-        </button>
-
-        {/* Results */}
-        {result && (
-          <div className="bg-white rounded-lg border border-emerald-200 p-6 shadow-lg">
-            <div className="flex items-center space-x-2 mb-4">
-              <Sprout className="w-6 h-6 text-emerald-600" />
-              <h4 className="text-lg font-semibold text-gray-900">AI Fertilizer Recommendations</h4>
+    <div className="space-y-8">
+      {/* Input Form Panel */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+        <div className="md:col-span-7 space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Season Selection */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                🌱 Cropping Season
+              </label>
+              <select
+                value={formData.season}
+                onChange={(e) => {
+                  handleInputChange('season', e.target.value)
+                  // Reset crop if not in selected season
+                  const currentSeason = e.target.value
+                  if (currentSeason !== 'all') {
+                    const match = allCropTypes.find(c => c.value === formData.cropType && (c.season === currentSeason || c.season === 'all'))
+                    if (!match) handleInputChange('cropType', '')
+                  }
+                }}
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
+              >
+                {seasons.map(season => (
+                  <option key={season.value} value={season.value}>
+                    {season.label} ({season.months})
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div className="mb-4 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-emerald-800">🌱 Crop & Season:</p>
-                  <p className="text-sm text-emerald-700">
-                    {cropTypes.find(c => c.value === formData.cropType)?.label} in {seasons.find(s => s.value === formData.season)?.label}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-emerald-800">🏞️ Soil Type:</p>
-                  <p className="text-sm text-emerald-700">
-                    {soilTypes.find(s => s.value === formData.soilType)?.label}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-emerald-800">📏 Area:</p>
-                  <p className="text-sm text-emerald-700">
-                    {formData.area} {formData.areaUnit} ({result.areaInHectares.toFixed(2)} hectares)
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-emerald-800">⚗️ Required NPK:</p>
-                  <p className="text-sm text-emerald-700">
-                    {result.requiredNPK.n.toFixed(0)}-{result.requiredNPK.p.toFixed(0)}-{result.requiredNPK.k.toFixed(0)} kg/ha
-                  </p>
-                </div>
+            {/* Crop Selection */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                🌾 Target Crop
+              </label>
+              <select
+                value={formData.cropType}
+                onChange={(e) => handleInputChange('cropType', e.target.value)}
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
+              >
+                <option value="">-- Choose Your Crop --</option>
+                {cropTypes.map(crop => (
+                  <option key={crop.value} value={crop.value}>
+                    {crop.label} [{crop.category}]
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Land Area */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                📏 Farm Land Area
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={formData.area}
+                  onChange={(e) => handleInputChange('area', e.target.value)}
+                  placeholder="e.g. 2.5"
+                  className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:bg-white focus:border-emerald-500 outline-none"
+                />
+                <select
+                  value={formData.areaUnit}
+                  onChange={(e) => handleInputChange('areaUnit', e.target.value)}
+                  className="w-28 px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none"
+                >
+                  <option value="acres">Acres</option>
+                  <option value="hectares">Hectares</option>
+                </select>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <h5 className="font-medium text-gray-900 flex items-center space-x-2">
-                <Beaker className="w-4 h-4 text-emerald-600" />
-                <span>AI Recommended Fertilizers:</span>
-              </h5>
-              {result.recommendations.map((rec, index) => (
-                <div key={index} className="flex items-center justify-between p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-                  <div>
-                    <p className="font-medium text-gray-900">{rec.name}</p>
-                    <p className="text-sm text-gray-600">₹{rec.price}/bag</p>
+            {/* Soil Type */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                🏞️ Soil Classification
+              </label>
+              <select
+                value={formData.soilType}
+                onChange={(e) => handleInputChange('soilType', e.target.value)}
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:bg-white focus:border-emerald-500 outline-none"
+              >
+                {soilTypes.map(soil => (
+                  <option key={soil.value} value={soil.value}>
+                    {soil.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <div className="pt-2">
+            <button
+              onClick={calculateFertilizer}
+              className="w-full py-3.5 px-6 bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-2xl font-black text-sm tracking-wide shadow-xl shadow-emerald-600/20 transform hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2"
+            >
+              <Brain className="w-5 h-5 text-emerald-200" />
+              <span>Generate Scientific Dosage &amp; Cost Estimation</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Soil Test / Advanced Options Card */}
+        <div className="md:col-span-5 bg-gradient-to-br from-emerald-50/70 to-teal-50/40 border border-emerald-100 rounded-3xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Beaker className="w-5 h-5 text-emerald-700" />
+            <h4 className="font-bold text-gray-900 text-sm">Soil Test Values (Optional)</h4>
+          </div>
+          <p className="text-xs text-gray-600">
+            Have a Soil Health Card? Enter available N-P-K (kg/ha) to credit what already exists in your soil.
+          </p>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-[11px] font-bold text-gray-600 mb-1">Nitrogen (N)</label>
+              <input
+                type="number"
+                placeholder="kg/ha"
+                value={formData.currentNPK.n}
+                onChange={(e) => handleNPKChange('currentNPK', 'n', e.target.value)}
+                className="w-full text-xs px-3 py-2 bg-white border border-gray-200 rounded-lg text-center font-mono font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-gray-600 mb-1">Phosphorus (P)</label>
+              <input
+                type="number"
+                placeholder="kg/ha"
+                value={formData.currentNPK.p}
+                onChange={(e) => handleNPKChange('currentNPK', 'p', e.target.value)}
+                className="w-full text-xs px-3 py-2 bg-white border border-gray-200 rounded-lg text-center font-mono font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-gray-600 mb-1">Potash (K)</label>
+              <input
+                type="number"
+                placeholder="kg/ha"
+                value={formData.currentNPK.k}
+                onChange={(e) => handleNPKChange('currentNPK', 'k', e.target.value)}
+                className="w-full text-xs px-3 py-2 bg-white border border-gray-200 rounded-lg text-center font-mono font-semibold"
+              />
+            </div>
+          </div>
+
+          <div className="p-3 bg-white/80 rounded-2xl border border-emerald-100 text-xs text-emerald-900 flex items-start gap-2">
+            <Sparkles className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+            <span>
+              If you leave these blank, the calculator applies standard agronomic recommendations calibrated for your soil type.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Output / Results Section */}
+      {result && (
+        <div className="space-y-6 pt-4 border-t border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* Summary Metric Header */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Target Crop</span>
+              <span className="text-base font-extrabold text-gray-900 mt-1 block">{result.selectedCrop.label}</span>
+              <span className="text-xs text-emerald-600 font-medium">Cycle: {result.selectedCrop.duration}</span>
+            </div>
+
+            <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Total Area</span>
+              <span className="text-base font-extrabold text-gray-900 mt-1 block">
+                {formData.area} {formData.areaUnit}
+              </span>
+              <span className="text-xs text-gray-500 font-medium">({result.areaInHectares.toFixed(2)} ha)</span>
+            </div>
+
+            <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Net Nutrient Need</span>
+              <span className="text-base font-extrabold text-emerald-700 mt-1 block font-mono">
+                {result.netNutrientsNeeded.n}N - {result.netNutrientsNeeded.p}P - {result.netNutrientsNeeded.k}K
+              </span>
+              <span className="text-xs text-gray-500 font-medium">kg total active</span>
+            </div>
+
+            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 shadow-sm">
+              <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Estimated Cost</span>
+              <span className="text-lg font-black text-emerald-900 mt-1 block font-mono">
+                ₹{result.totalEstimatedCost.toLocaleString('en-IN')}
+              </span>
+              <span className="text-xs text-emerald-700 font-medium">Govt. Subsidized Rates</span>
+            </div>
+          </div>
+
+          {/* Detailed Bag Recommendation Table */}
+          <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="p-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex justify-between items-center">
+              <div>
+                <h4 className="font-extrabold text-lg flex items-center gap-2">
+                  <Sprout className="w-5 h-5 text-emerald-200" />
+                  Prescribed Commercial Fertilizer Dosage
+                </h4>
+                <p className="text-xs text-emerald-100 mt-0.5">
+                  Scientifically combined so DAP and Urea do not over-supply nitrogen
+                </p>
+              </div>
+              <button
+                onClick={resetCalculator}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-xl text-xs font-semibold transition"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset
+              </button>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {result.standardPlan.map((item, idx) => (
+                <div key={idx} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-emerald-50/20 transition">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-gray-900 text-base">{item.name}</span>
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                        {item.badge}
+                      </span>
+                    </div>
+                    <p className="text-xs font-semibold text-gray-500 font-mono">{item.nutrientDetail}</p>
+                    <p className="text-xs text-teal-800 font-medium mt-1">
+                      <span className="font-bold">Application Timing:</span> {item.stage}
+                    </p>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-emerald-800">{rec.quantity} bags</p>
-                    <p className="text-sm text-emerald-600 font-medium">₹{rec.cost.toLocaleString()}</p>
+
+                  <div className="flex items-center justify-between md:justify-end gap-6 text-right border-t md:border-t-0 pt-3 md:pt-0">
+                    <div>
+                      <span className="text-xs text-gray-500 font-semibold uppercase block">Required Bags</span>
+                      <span className="text-2xl font-black text-gray-900">{item.bags} Bags</span>
+                    </div>
+
+                    <div className="min-w-[100px]">
+                      <span className="text-xs text-gray-500 font-semibold uppercase block">Approx Price</span>
+                      <span className="text-base font-extrabold text-emerald-700 font-mono">
+                        ₹{(item.bags * item.pricePerBag).toLocaleString('en-IN')}
+                      </span>
+                      <span className="text-[11px] text-gray-400 block">(₹{item.pricePerBag}/bag)</span>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-start space-x-2">
-                <Brain className="w-5 h-5 text-blue-600 mt-0.5" />
+            {/* Micronutrient & Organic Advisory Box */}
+            <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 border-t border-amber-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-amber-100 text-amber-800 rounded-xl mt-0.5">
+                  <Leaf className="w-5 h-5" />
+                </div>
                 <div>
-                  <p className="text-sm font-medium text-blue-800">AI Analysis Complete</p>
-                  <p className="text-xs text-blue-700 mt-1">
-                    Recommendations are optimized for {seasons.find(s => s.value === formData.season)?.label.toLowerCase()} season,
-                    {soilTypes.find(s => s.value === formData.soilType)?.label.toLowerCase()} conditions, and your crop's specific nutrient requirements.
+                  <h5 className="font-bold text-amber-900 text-sm">Organic Carbon Advisory</h5>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    Apply approx. <b>{result.compostTonnes} tonnes</b> of Farm Yard Manure (FYM) or Vermicompost before final plowing to improve soil organic carbon (SOC) and microbial activity.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-teal-100 text-teal-800 rounded-xl mt-0.5">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h5 className="font-bold text-teal-900 text-sm">Micronutrient Boost (Zinc)</h5>
+                  <p className="text-xs text-teal-800 mt-0.5">
+                    Broadcast <b>{result.zincKg} kg</b> of Zinc Sulphate (33% Zn) separately (do not mix directly with DAP) to prevent hidden hunger and yellowing in crops.
                   </p>
                 </div>
               </div>
             </div>
-
-            <button
-              onClick={resetCalculator}
-              className="w-full mt-4 bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors duration-200 flex items-center justify-center space-x-2"
-            >
-              <Sprout className="w-4 h-4" />
-              <span>Get New AI Recommendations</span>
-            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -31,6 +31,27 @@ const Landing = () => {
   const [stats, setStats] = useState({ farmers: 0, products: 0, orders: 0, satisfaction: 0 })
   const [featuredProducts, setFeaturedProducts] = useState([])
   const [loadingProducts, setLoadingProducts] = useState(true)
+  const [shopInfo, setShopInfo] = useState({
+    shop_name: 'sri fertilizers',
+    shop_phone: '+91 90143 97974',
+    shop_address: 'Main Market Yard, Main Road, AP, India',
+    shop_slug: 'sri-fertilizers'
+  })
+
+  // Fetch live active shop profile
+  useEffect(() => {
+    fetch('http://localhost:5012/api/public/shop')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.shop_name) {
+          setShopInfo(prev => ({
+            ...prev,
+            ...data
+          }))
+        }
+      })
+      .catch(err => console.error('Error loading shop profile:', err))
+  }, [])
 
   // Animated counter effect
   useEffect(() => {
@@ -90,7 +111,7 @@ const Landing = () => {
           <div className="flex items-center space-x-6 text-xs text-emerald-100 hidden sm:flex">
             <span className="flex items-center space-x-1">
               <PhoneCall className="w-3.5 h-3.5 text-emerald-300" />
-              <span>Toll Free Farmer Helpline: +91 98765 43210</span>
+              <span>Farmer Helpline: {shopInfo.shop_phone}</span>
             </span>
             <span className="flex items-center space-x-1">
               <Truck className="w-3.5 h-3.5 text-emerald-300" />
@@ -110,8 +131,8 @@ const Landing = () => {
                 <Leaf className="w-7 h-7 text-white" />
               </div>
               <div>
-                <span className="text-2xl font-black bg-gradient-to-r from-emerald-700 via-teal-700 to-green-900 bg-clip-text text-transparent tracking-tight">
-                  AgriFert
+                <span className="text-2xl font-black bg-gradient-to-r from-emerald-700 via-teal-700 to-green-900 bg-clip-text text-transparent tracking-tight capitalize">
+                  {shopInfo.shop_name}
                 </span>
                 <span className="block text-[10px] font-bold uppercase tracking-widest text-emerald-600 -mt-1">
                   Agro Inputs & Fertilizer Hub
@@ -429,7 +450,7 @@ const Landing = () => {
                   Visit Our Physical Store
                 </span>
                 <h2 className="text-3xl sm:text-4xl font-black mt-4 leading-tight">
-                  AgriFert Agro Center & Fertilizer Depot
+                  {shopInfo.shop_name}
                 </h2>
                 <p className="text-emerald-100/90 text-sm mt-3 leading-relaxed">
                   Walk in for free soil testing consultation, bulk fertilizer booking, and direct seed procurement.
@@ -440,7 +461,7 @@ const Landing = () => {
                     <MapPin className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <div>
                       <span className="font-bold block">Main Market Depot</span>
-                      <span className="text-emerald-200 text-xs">Shop #4, Agricultural Market Yard, Main Road, AP, India</span>
+                      <span className="text-emerald-200 text-xs">{shopInfo.shop_address}</span>
                     </div>
                   </div>
                   <div className="flex items-center space-x-3.5">
@@ -454,7 +475,7 @@ const Landing = () => {
                     <PhoneCall className="w-5 h-5 text-emerald-400 flex-shrink-0" />
                     <div>
                       <span className="font-bold block">Order via Phone / WhatsApp</span>
-                      <span className="text-emerald-200 text-xs">+91 98765 43210 (Quick WhatsApp Bill Booking Available)</span>
+                      <span className="text-emerald-200 text-xs">{shopInfo.shop_phone} (Quick WhatsApp Bill Booking Available)</span>
                     </div>
                   </div>
                 </div>
@@ -542,13 +563,13 @@ const Landing = () => {
             <div>
               <h4 className="text-white font-bold mb-3 uppercase tracking-wider text-xs">Helpline Support</h4>
               <p className="text-gray-400 mb-2">Available 7 AM - 9 PM daily</p>
-              <p className="text-emerald-400 font-bold text-sm">+91 98765 43210</p>
-              <p className="text-gray-500 mt-1">support@agrifert-shop.com</p>
+              <p className="text-emerald-400 font-bold text-sm">{shopInfo.shop_phone}</p>
+              <p className="text-gray-500 mt-1">support@{shopInfo.shop_slug || 'fertilizer'}.com</p>
             </div>
           </div>
 
           <div className="pt-8 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4 text-gray-500">
-            <p>© {new Date().getFullYear()} AgriFert Management System. All rights reserved.</p>
+            <p className="capitalize">© {new Date().getFullYear()} {shopInfo.shop_name} Management System. All rights reserved.</p>
             <p className="flex items-center space-x-1 text-emerald-500">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Govt. Fertilizer License Valid & Certified</span>

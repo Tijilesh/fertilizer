@@ -7,49 +7,52 @@ import api from '../../utils/api'
 import VoiceInputButton from '../../components/common/VoiceInputButton'
 import { useLanguage } from '../../contexts/LanguageContext'
 
+import SmartProductImportModal from '../../components/inventory/SmartProductImportModal'
+
 const Products = ({ products, onRefresh }) => {
   const { t } = useLanguage()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState('all')
   const fileInputRef = useRef(null)
 
+  // Smart Import Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+  const [rawImportData, setRawImportData] = useState([])
+  const [fileHeaders, setFileHeaders] = useState([])
+  const [importFileName, setImportFileName] = useState('')
+
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    setImportFileName(file.name);
     const reader = new FileReader();
-    reader.onload = async (evt) => {
+    reader.onload = (evt) => {
       try {
         const bstr = evt.target.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
-        
-        const parsedProducts = data.map(row => ({
-          name: row.name || row.Name || row.NAME,
-          type: row.type || row.Type || row.TYPE || 'Other',
-          price: parseFloat(row.price || row.Price || row.PRICE) || 0,
-          quantity: parseInt(row.quantity || row.Quantity || row.QUANTITY) || 0,
-          supplier: row.supplier || row.Supplier || row.SUPPLIER || '',
-          description: row.description || row.Description || row.DESCRIPTION || ''
-        })).filter(p => p.name && p.price > 0);
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-        if (parsedProducts.length === 0) {
-          toast.error('No valid products found in the file. Ensure you have "name" and "price" columns.')
-          return
+        if (!data || data.length === 0) {
+          toast.error('The selected file has no data rows.');
+          return;
         }
 
-        const res = await api.post('/products/bulk', { products: parsedProducts })
-        toast.success(res.data.message || 'Products imported successfully')
-        onRefresh()
+        // Extract all headers found in the sheet
+        const headers = Array.from(new Set(data.flatMap(row => Object.keys(row))));
+        
+        setRawImportData(data);
+        setFileHeaders(headers);
+        setIsImportModalOpen(true);
       } catch (err) {
-        console.error('Error importing products:', err)
-        toast.error(err.response?.data?.error || 'Failed to import products. Check file format.')
+        console.error('Error reading spreadsheet file:', err);
+        toast.error('Failed to read file. Please ensure it is a valid Excel (.xlsx/.xls) or CSV file.');
       }
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-    reader.readAsBinaryString(file)
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsBinaryString(file);
   }
 
   const productList = Array.isArray(products) ? products : []
@@ -297,6 +300,18 @@ const Products = ({ products, onRefresh }) => {
           </div>
         )}
       </div>
+
+      {/* Universal Multi-Company Product Import Modal */}
+      <SmartProductImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        rawData={rawImportData}
+        fileHeaders={fileHeaders}
+        fileName={importFileName}
+        onImportSuccess={() => {
+          onRefresh()
+        }}
+      />
     </div>
   )
 }

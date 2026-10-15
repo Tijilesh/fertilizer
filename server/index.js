@@ -1011,13 +1011,18 @@ app.get('/api/government-schemes', async (req, res) => {
 
 app.get('/api/dashboard/stats', verifyToken, async (req, res) => {
   try {
-    const [[{ salesRevenue }]] = await db.execute("SELECT SUM(amount) as salesRevenue FROM payments WHERE payment_type = 'income' AND shop_id = ?", [req.user.shop_id || 1]);
-    const totalRevenue = Number(salesRevenue) || 0;
+    const shopId = req.user.shop_id || 1;
+    // Calculate total revenue from sales table and income payments
+    const [[{ salesTotal }]] = await db.execute("SELECT SUM(total_amount) as salesTotal FROM sales WHERE shop_id = ?", [shopId]);
+    const [[{ paymentIncome }]] = await db.execute("SELECT SUM(amount) as paymentIncome FROM payments WHERE payment_type = 'income' AND shop_id = ?", [shopId]);
+    
+    // Use salesTotal or paymentIncome (whichever is recorded and accurate)
+    const totalRevenue = Number(salesTotal) || Number(paymentIncome) || 0;
 
-    const [[{ totalProducts }]] = await db.execute('SELECT COUNT(*) as totalProducts FROM products WHERE shop_id = ?', [req.user.shop_id || 1]);
-    const [[{ totalFarmers }]] = await db.execute('SELECT COUNT(*) as totalFarmers FROM farmers WHERE shop_id = ?', [req.user.shop_id || 1]);
+    const [[{ totalProducts }]] = await db.execute('SELECT COUNT(*) as totalProducts FROM products WHERE shop_id = ?', [shopId]);
+    const [[{ totalFarmers }]] = await db.execute('SELECT COUNT(*) as totalFarmers FROM farmers WHERE shop_id = ?', [shopId]);
 
-    const [[{ totalSales }]] = await db.execute('SELECT COUNT(*) as totalSales FROM sales WHERE shop_id = ?', [req.user.shop_id || 1]);
+    const [[{ totalSales }]] = await db.execute('SELECT COUNT(*) as totalSales FROM sales WHERE shop_id = ?', [shopId]);
     const totalTransactions = Number(totalSales) || 0;
     
     const avgOrderValue = totalTransactions > 0 ? (totalRevenue / totalTransactions) : 0;
@@ -2541,6 +2546,16 @@ app.post('/api/auth/register', async (req, res) => {
       const [shopResult] = await db.execute('INSERT INTO shops (name, slug) VALUES (?, ?)', [shop_name, uniqueSlug]);
       assignedShopId = shopResult.insertId;
       assignedShopSlug = uniqueSlug;
+
+      // Seed shop settings with registered shop name and phone
+      try {
+        await db.execute(
+          'INSERT INTO shop_settings (shop_id, setting_key, setting_value) VALUES (?, ?, ?), (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
+          [assignedShopId, 'shop_name', shop_name, assignedShopId, 'shop_phone', phone || '']
+        );
+      } catch (err) {
+        console.error('Failed to seed default shop_settings:', err.message);
+      }
     } else if (role !== 'owner' && shop_slug) {
       // Customer registering for a specific shop
       const [[shop]] = await db.execute('SELECT id, slug FROM shops WHERE slug = ?', [shop_slug]);
@@ -2589,8 +2604,8 @@ app.post('/api/auth/register', async (req, res) => {
     // Delete OTP ONLY after successful registration
     await db.execute('DELETE FROM email_otps WHERE email = ?', [email]);
 
-    const token = jwt.sign({ id: result.insertId, username, email, role: role || 'user', shop_id: assignedShopId, shop_slug: assignedShopSlug, farmer_id: farmerId }, process.env.JWT_SECRET || 'your-secret-key', { expiresIn: '24h' });
-    res.json({ token, user: { id: result.insertId, username, email, role: role || 'user', shop_id: assignedShopId, shop_slug: assignedShopSlug, farmer_id: farmerId } });
+    const token = jwt.sign({ id: result.insertId, username, email, role: role || 'user', shop_id: assignedShopId, shop_name: shop_name || null, shop_slug: assignedShopSlug, farmer_id: farmerId, phone: phone || null }, process.env.JWT_SECRET || 'your-secret-key', { expiresIn: '24h' });
+    res.json({ token, user: { id: result.insertId, username, email, phone: phone || null, role: role || 'user', shop_id: assignedShopId, shop_name: shop_name || null, shop_slug: assignedShopSlug, farmer_id: farmerId } });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ error: 'Username or email already exists' });
@@ -2609,7 +2624,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     const [[user]] = await db.execute(`
-      SELECT u.id, u.username, u.email, u.password, u.role, u.shop_id, u.farmer_id, s.name as shop_name, s.slug as shop_slug, f.current_credit, f.credit_limit, f.farm_size, f.crop_type
+      SELECT u.id, u.username, u.email, u.phone, u.password, u.role, u.shop_id, u.farmer_id, s.name as shop_name, s.slug as shop_slug, f.current_credit, f.credit_limit, f.farm_size, f.crop_type
       FROM users u 
       LEFT JOIN shops s ON u.shop_id = s.id 
       LEFT JOIN farmers f ON u.farmer_id = f.id
@@ -2625,8 +2640,8 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign({ id: user.id, username: user.username, email: user.email, role: user.role, shop_id: user.shop_id, shop_name: user.shop_name, shop_slug: user.shop_slug, farmer_id: user.farmer_id }, process.env.JWT_SECRET || 'your-secret-key', { expiresIn: '24h' });
-    res.json({ token, user: { id: user.id, username: user.username, email: user.email, role: user.role, shop_id: user.shop_id, shop_name: user.shop_name, shop_slug: user.shop_slug, farmer_id: user.farmer_id, current_credit: user.current_credit, credit_limit: user.credit_limit, farm_size: user.farm_size, crop_type: user.crop_type } });
+    const token = jwt.sign({ id: user.id, username: user.username, email: user.email, phone: user.phone, role: user.role, shop_id: user.shop_id, shop_name: user.shop_name, shop_slug: user.shop_slug, farmer_id: user.farmer_id }, process.env.JWT_SECRET || 'your-secret-key', { expiresIn: '24h' });
+    res.json({ token, user: { id: user.id, username: user.username, email: user.email, phone: user.phone, role: user.role, shop_id: user.shop_id, shop_name: user.shop_name, shop_slug: user.shop_slug, farmer_id: user.farmer_id, current_credit: user.current_credit, credit_limit: user.credit_limit, farm_size: user.farm_size, crop_type: user.crop_type } });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2643,6 +2658,36 @@ app.get('/api/products/featured', async (req, res) => {
       LIMIT 6
     `);
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Public: Get Primary/Latest Active Shop details for Landing page
+app.get('/api/public/shop', async (req, res) => {
+  try {
+    // Look for registered custom shop (e.g. latest created owner shop or id 17)
+    const [[shop]] = await db.execute(`
+      SELECT s.id, s.name, s.slug, u.phone 
+      FROM shops s 
+      LEFT JOIN users u ON u.shop_id = s.id AND u.role = 'owner'
+      WHERE s.id != 1 
+      ORDER BY s.id DESC 
+      LIMIT 1
+    `);
+
+    const targetShopId = shop ? shop.id : 1;
+    const [rows] = await db.execute('SELECT setting_key, setting_value FROM shop_settings WHERE shop_id = ?', [targetShopId]);
+    const settings = rows.reduce((acc, row) => ({ ...acc, [row.setting_key]: row.setting_value }), {});
+
+    res.json({
+      shop_id: targetShopId,
+      shop_name: settings.shop_name || shop?.name || 'sri fertilizers',
+      shop_phone: settings.shop_phone || shop?.phone || '+91 90143 97974',
+      shop_address: settings.shop_address || 'Main Road, Market Yard, AP, India',
+      shop_gstin: settings.shop_gstin || '09AAACK1234M1Z5',
+      shop_slug: shop?.slug || 'sri-fertilizers'
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2727,7 +2772,16 @@ app.post('/api/products/bulk', verifyToken, async (req, res) => {
       const supplierName = prod.supplier ? String(prod.supplier).trim() : null;
       
       await connection.execute(
-        'INSERT INTO products (name, type, price, quantity, supplier, description, batch_number, expiry_date, shop_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        `INSERT INTO products (name, type, price, quantity, supplier, description, batch_number, expiry_date, shop_id) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE 
+           price = VALUES(price),
+           quantity = quantity + VALUES(quantity),
+           type = IF(VALUES(type) != 'Other', VALUES(type), type),
+           supplier = COALESCE(VALUES(supplier), supplier),
+           description = COALESCE(VALUES(description), description),
+           batch_number = COALESCE(VALUES(batch_number), batch_number),
+           expiry_date = COALESCE(VALUES(expiry_date), expiry_date)`,
         [
           prod.name,
           type,
@@ -2963,8 +3017,8 @@ app.post('/api/sales', verifyToken, async (req, res) => {
     if (!isCredit) {
       // Add to payments as income ONLY if it's paid now
       await connection.execute(
-        'INSERT INTO payments (sale_id, amount, payment_method, payment_type, notes) VALUES (?, ?, ?, ?, ?)',
-        [saleId, total_amount, payment_method || 'Cash', 'income', `Sale to ${customer_name}`]
+        'INSERT INTO payments (sale_id, amount, payment_method, payment_type, notes, shop_id) VALUES (?, ?, ?, ?, ?, ?)',
+        [saleId, total_amount, payment_method || 'Cash', 'income', `Sale to ${customer_name || 'Customer'}`, req.user.shop_id || 1]
       );
     }
 
